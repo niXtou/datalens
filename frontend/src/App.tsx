@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import UploadForm from './components/UploadForm';
 
 function App() {
   const [status, setStatus] = useState<'loading' | 'healthy' | 'error'>('loading');
@@ -8,7 +9,7 @@ function App() {
   useEffect(() => {
     fetch('http://localhost:8000/health')
       .then(res => res.json())
-      .then(data => {
+      .then(_data => {
         setStatus('healthy');
         setMessage('Backend is online');
       })
@@ -23,6 +24,8 @@ function App() {
       <h1>DataLens AI</h1>
       <p>Status: {status === 'loading' ? 'Checking...' : status}</p>
       <p>{message}</p>
+      
+      <UploadForm />
     </div>
   )
 }

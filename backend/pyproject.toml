@@ -16,6 +16,7 @@ dependencies = [
     "langchain>=0.1.0",
     "langgraph>=0.0.1",
     "langsmith>=0.0.50",
+    "python-multipart>=0.0.27",
 ]
 
 [project.optional-dependencies]
