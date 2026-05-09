@@ -24,18 +24,18 @@ TOOLS = {
 class AnalysisPlan(BaseModel):
     analyses: list[str]
 
-def get_llm() -> ChatOpenRouter:
-    return ChatOpenRouter(model="google/gemini-3.1-flash-lite-preview")
+_llm = ChatOpenRouter(model="google/gemini-3.1-flash-lite-preview")
 
 # --- Nodes ---
 
 def infer_columns_node(state: AgentState) -> dict:
     df = pd.read_csv(state["csv_path"])
     schemas = infer_columns(df)
-    return {"column_types": {s.name: s.column_type for s in schemas}}
+    return {"column_types": {s.name: s.column_type for s in schemas},
+            "stream_log": ["Inferring column types..."]}
 
 def plan_analyses(state: AgentState) -> dict:
-    structured_llm = get_llm().with_structured_output(AnalysisPlan)
+    structured_llm = _llm.with_structured_output(AnalysisPlan)
     column_summary = ", ".join(
         f"{name}: {ctype.value}" for name, ctype in state["column_types"].items()
     )
@@ -49,7 +49,8 @@ def plan_analyses(state: AgentState) -> dict:
         )),
         HumanMessage(content=f"Columns: {column_summary}")
     ])
-    return {"analyses_requested": result.analyses}
+    return {"analyses_requested": result.analyses, 
+            "stream_log": ["Planning analyses..."]}
 
 def run_tool(state: AgentState) -> dict:
     analyses = list(state["analyses_requested"])
@@ -58,18 +59,19 @@ def run_tool(state: AgentState) -> dict:
     result = TOOLS[tool_name](df)
     return {
         "analyses_requested": analyses,
-        "results": {**state["results"], tool_name: result}
+        "results": {**state["results"], tool_name: result},
+        "stream_log": [f"Running {tool_name}..."]
     }
 
 def summarize(state: AgentState) -> dict:
     results = json.dumps(state["results"], indent=2)
-    response = get_llm().invoke([
+    response = _llm.invoke([
         SystemMessage(content=(
-            "You are a data analyst. Summarize the following analysis results for a non-technical audience."
+            "You are a data analyst. Summarize the following analysis results for a non-technical audience. Be concise."
         )),
         HumanMessage(content=results)
     ])
-    return {"stream_log": [response.content]}
+    return {"stream_log": ["Summarizing results...", response.content]}
 
 def should_continue(state: AgentState) -> str:
     """Returns 'run_tool' if analyses remain, otherwise 'summarize'."""

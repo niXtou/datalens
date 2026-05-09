@@ -41,10 +41,8 @@ def test_plan_analyses(tmp_path):
         "stream_log": [],
     }
 
-    with patch("datalens_ai.agent.graph.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("datalens_ai.agent.graph._llm") as mock_llm:
         mock_llm.with_structured_output.return_value.invoke.return_value = AnalysisPlan(analyses=["run_clustering", "run_regression"])
-        mock_get_llm.return_value = mock_llm
 
         result = plan_analyses(state)
 
@@ -85,11 +83,12 @@ def test_summarize():
         "stream_log": [],
     }
 
-    with patch("datalens_ai.agent.graph.get_llm") as mock_get_llm:
-        mock_llm = MagicMock()
+    with patch("datalens_ai.agent.graph._llm") as mock_llm:
         mock_llm.invoke.return_value.content = "The clustering analysis found 2 clusters with a silhouette score of 0.7."
-        mock_get_llm.return_value = mock_llm
 
         result = summarize(state)
 
-    assert result["stream_log"] == ["The clustering analysis found 2 clusters with a silhouette score of 0.7."]
+    assert result["stream_log"] == [
+        "Summarizing results...",
+        "The clustering analysis found 2 clusters with a silhouette score of 0.7.",
+    ]

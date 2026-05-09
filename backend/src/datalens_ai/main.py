@@ -1,9 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datalens_ai.api.upload import router as upload_router
-from dotenv import load_dotenv
-
-load_dotenv()
+from datalens_ai.api.analyse import router as analyse_router
 
 app = FastAPI()
 
@@ -21,6 +22,7 @@ app.add_middleware(
 
 # ROUTERS
 app.include_router(upload_router)
+app.include_router(analyse_router)
 
 
 # ENDPOINTS
