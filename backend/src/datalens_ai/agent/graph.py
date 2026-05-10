@@ -64,14 +64,18 @@ def run_tool(state: AgentState) -> dict:
     }
 
 def summarize(state: AgentState) -> dict:
-    results = json.dumps(state["results"], indent=2)
+    results = json.dumps(
+        {k: v.model_dump() for k, v in state["results"].items()},
+        indent=2
+    )
     response = _llm.invoke([
         SystemMessage(content=(
             "You are a data analyst. Summarize the following analysis results for a non-technical audience. Be concise."
         )),
         HumanMessage(content=results)
     ])
-    return {"stream_log": ["Summarizing results...", response.content]}
+    return {"summary": response.content,
+            "stream_log": ["Summarizing results...", response.content]}
 
 def should_continue(state: AgentState) -> str:
     """Returns 'run_tool' if analyses remain, otherwise 'summarize'."""

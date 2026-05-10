@@ -1,8 +1,9 @@
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 import pandas as pd
+from datalens_ai.models.results import RegressionResult
 
-def run_regression(df: pd.DataFrame) -> dict:
+def run_regression(df: pd.DataFrame) -> RegressionResult:
     
     X_full = df.select_dtypes(include="number").dropna()
     y = X_full.iloc[:, -1] # Assume the last numeric column is the target
@@ -12,7 +13,7 @@ def run_regression(df: pd.DataFrame) -> dict:
     model.fit(X, y)
     score = r2_score(y, model.predict(X))
 
-    return {
-        "coefficients": model.coef_.tolist(),
-        "r2_score": float(score)
-    }
+    return RegressionResult(
+        coefficients=model.coef_.tolist(),
+        r2_score=float(score)
+    )

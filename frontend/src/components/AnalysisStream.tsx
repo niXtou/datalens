@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import ResultsDashboard from "./ResultsDashboard";
 
 
 function parseSseChunk(raw: string) {
@@ -49,6 +50,7 @@ export default function AnalysisStream({ fileId }: { fileId: string }) {
               {log.map((msg, i) => <li key={i}>{msg}</li>)}
           </ul>
           {isDone && <p>✅ Analysis complete.</p>}
+          {isDone && <ResultsDashboard fileId={fileId} />}
           {error && <p style={{ color: 'red' }}>{error}</p>}
       </div>
     );

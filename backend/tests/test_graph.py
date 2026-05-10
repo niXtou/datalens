@@ -4,6 +4,7 @@ import pandas as pd
 
 from datalens_ai.agent.graph import infer_columns_node, plan_analyses, AnalysisPlan, run_tool, summarize
 from datalens_ai.models.upload import ColumnType
+from datalens_ai.models.results import ClusteringResult
 
 def test_infer_columns_node(tmp_path):
     # Create a small CSV with known column types
@@ -70,8 +71,10 @@ def test_run_tool_clustering(tmp_path):
 
     assert result["analyses_requested"] == []
     assert "run_clustering" in result["results"]
-    assert "cluster_labels" in result["results"]["run_clustering"]
-    assert "silhouette_score" in result["results"]["run_clustering"]
+    clustering = result["results"]["run_clustering"]
+    assert isinstance(clustering, ClusteringResult)
+    assert len(clustering.cluster_labels) == 6
+    assert isinstance(clustering.silhouette_score, float)
 
 
 def test_summarize():
@@ -79,7 +82,7 @@ def test_summarize():
         "csv_path": "",
         "column_types": {},
         "analyses_requested": [],
-        "results": {"run_clustering": {"cluster_labels": [0, 1, 0], "silhouette_score": 0.7}},
+        "results": {"run_clustering": ClusteringResult(cluster_labels=[0, 1, 0], silhouette_score=0.7)},
         "stream_log": [],
     }
 
