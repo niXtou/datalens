@@ -1,0 +1,17 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN pip install uv
+
+COPY backend/pyproject.toml backend/uv.lock ./
+
+# Install only production dependencies (excludes the dev optional group)
+RUN uv sync --frozen --no-dev
+
+COPY backend/src ./src
+
+ENV PYTHONPATH=/app/src
+
+# No --reload in production
+CMD ["uv", "run", "uvicorn", "datalens_ai.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

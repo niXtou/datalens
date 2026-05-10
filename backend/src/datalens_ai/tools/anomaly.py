@@ -1,5 +1,4 @@
 from sklearn.ensemble import IsolationForest
-import numpy as np
 import pandas as pd
 from datalens_ai.models.results import AnomalyResult
 

@@ -4,7 +4,7 @@ import pandas as pd
 
 from datalens_ai.agent.graph import infer_columns_node, plan_analyses, AnalysisPlan, run_tool, summarize
 from datalens_ai.models.upload import ColumnType
-from datalens_ai.models.results import ClusteringResult
+from datalens_ai.models.results import AnomalyResult, ClusteringResult, RegressionResult
 
 def test_infer_columns_node(tmp_path):
     # Create a small CSV with known column types
@@ -95,3 +95,46 @@ def test_summarize():
         "Summarizing results...",
         "The clustering analysis found 2 clusters with a silhouette score of 0.7.",
     ]
+
+
+def test_run_tool_anomaly(tmp_path):
+    df = pd.DataFrame({
+        "x": [1.0, 2.0, 3.0, 1.1, 2.1, 100.0],
+        "y": [1.0, 2.0, 3.0, 1.1, 2.1, 100.0],
+    })
+    csv_file = tmp_path / "test.csv"
+    df.to_csv(csv_file, index=False)
+
+    state = {
+        "csv_path": str(csv_file),
+        "column_types": {},
+        "analyses_requested": ["run_anomaly"],
+        "results": {},
+        "stream_log": [],
+        "summary": "",
+    }
+    result = run_tool(state)
+    anomaly = result["results"]["run_anomaly"]
+    assert isinstance(anomaly, AnomalyResult)
+    assert isinstance(anomaly.contamination_rate, float)
+
+def test_run_tool_regression(tmp_path):
+    df = pd.DataFrame({
+        "x": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        "y": [2.0, 4.0, 6.0, 8.0, 10.0, 12.0],
+    })
+    csv_file = tmp_path / "test.csv"
+    df.to_csv(csv_file, index=False)
+
+    state = {
+        "csv_path": str(csv_file),
+        "column_types": {},
+        "analyses_requested": ["run_regression"],
+        "results": {},
+        "stream_log": [],
+        "summary": "",
+    }
+    result = run_tool(state)
+    regression = result["results"]["run_regression"]
+    assert isinstance(regression, RegressionResult)
+    assert isinstance(regression.r2_score, float)

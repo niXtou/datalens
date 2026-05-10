@@ -1,27 +1,51 @@
 services:
+  # ── Development ─────────────────────────────────────────────────────────────
   api:
+    profiles: [dev]
     build:
       context: .
       dockerfile: ./backend/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/src:/app/src
-    # Environment variables passed into the container. Our backend config.py reads ENVIRONMENT
-    # and adjusts behavior (logging verbosity, error details, etc). Development = verbose output.
+      - ./backend/src:/app/src   # live reload: source changes reflected instantly
     environment:
       - ENVIRONMENT=development
+    env_file: .env
 
   frontend:
+    profiles: [dev]
     build:
       context: .
       dockerfile: ./frontend/Dockerfile
     ports:
       - "3000:3000"
-    # Two volumes: src/ changes appear live (JSX, components), and public/ changes (favicon, static assets).
-    # If either changed outside the container, Vite dev server picks up the change instantly.
     volumes:
-      - ./frontend/src:/app/src
+      - ./frontend/src:/app/src       # live reload: Vite picks up JSX changes
       - ./frontend/public:/app/public
     depends_on:
       - api
+
+  # ── Production ───────────────────────────────────────────────────────────────
+  api-prod:
+    profiles: [prod]
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile.prod
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+    env_file: .env
+
+  frontend-prod:
+    profiles: [prod]
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile.prod
+      args:
+        - VITE_API_URL=http://localhost:8000
+    ports:
+      - "80:80"
+    depends_on:
+      - api-prod

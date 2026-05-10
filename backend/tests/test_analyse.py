@@ -68,3 +68,22 @@ def test_get_results_returns_stored_data(client):
     assert "run_clustering" in data["results"]
     assert data["results"]["run_clustering"]["type"] == "clustering"
     assert data["results"]["run_clustering"]["silhouette_score"] == 0.75
+
+
+def test_upload_csv(client, tmp_path):
+    df = pd.DataFrame({
+        "age": [25, 30],
+        "name": ["Alice", "Bob"]
+    })
+    csv_bytes = df.to_csv(index=False).encode()
+
+    response = client.post(
+        "/upload",
+        files={"file": ("test.csv", csv_bytes, "text/csv")}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "file_id" in data
+    assert len(data["columns"]) == 2
+

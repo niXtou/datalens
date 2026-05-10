@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from datalens_ai.api.upload import router as upload_router
-from datalens_ai.api.analyse import router as analyse_router
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from datalens_ai.api.upload import router as upload_router  # noqa: E402
+from datalens_ai.api.analyse import router as analyse_router  # noqa: E402
 
 app = FastAPI()
 
