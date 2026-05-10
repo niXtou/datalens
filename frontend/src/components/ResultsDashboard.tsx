@@ -194,7 +194,7 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/results/${fileId}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`Server error: ${r.status}`); return r.json() })
       .then(setData)
       .catch(err => setError(String(err)))
   }, [fileId])

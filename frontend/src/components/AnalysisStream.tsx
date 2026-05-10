@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader } from './ui/card'
 import { CheckCircle, Loader } from 'lucide-react'
 
@@ -19,13 +19,24 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
   const [isDone, setIsDone] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
+  // Keep a stable ref so the stream closure always calls the latest onDone
+  // without re-triggering the effect when the parent re-renders.
+  const onDoneRef = useRef(onDone)
+  useEffect(() => { onDoneRef.current = onDone }, [onDone])
+
   useEffect(() => {
     async function stream() {
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/analyse/${fileId}`, {
           method: 'POST',
         })
-        const reader  = response.body!.getReader()
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status} ${response.statusText}`)
+        }
+        if (!response.body) {
+          throw new Error('Response body is empty')
+        }
+        const reader  = response.body.getReader()
         const decoder = new TextDecoder()
 
         while (true) {
@@ -35,7 +46,7 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
             if (event.type === 'step') setLog(prev => [...prev, event.data])
             else if (event.type === 'done') {
               setIsDone(true)
-              setTimeout(onDone, 1200)
+              setTimeout(() => onDoneRef.current(), 1200)
             }
           }
         }
@@ -44,7 +55,7 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
       }
     }
     stream()
-  }, [])
+  }, [fileId])
 
   return (
     <div className="flex flex-col gap-6">
