@@ -1,4 +1,4 @@
-# DataLens AI
+# DataLens
 
 Upload a CSV → LangGraph agent runs ML analyses → React dashboard streams live results.
 

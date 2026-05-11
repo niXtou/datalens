@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "datalens-ai"
+name = "datalens"
 version = "0.1.0"
 description = "Upload CSV, run ML analyses with LangGraph, stream results to React dashboard"
 requires-python = ">=3.13"

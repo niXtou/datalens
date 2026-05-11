@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str
     langsmith_api_key: str = ""
     langsmith_tracing: bool = False
-    langsmith_project: str = "datalens-ai"
+    langsmith_project: str = "datalens"
     environment: str = "development"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     max_upload_bytes: int = 10 * 1024 * 1024  # 10 MB

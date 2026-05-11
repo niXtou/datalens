@@ -170,7 +170,7 @@ export default function App() {
       <footer className="border-t border-[var(--color-border)] py-4">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)' }}>
-            DataLens AI — LangGraph · FastAPI · React
+            DataLens — LangGraph · FastAPI · React
           </p>
         </div>
       </footer>
