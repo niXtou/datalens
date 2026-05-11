@@ -3,7 +3,7 @@ import type { components } from '../types/api'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Card, CardContent, CardHeader } from './ui/card'
 import { Badge } from './ui/badge'
-import { stripMarkdown } from '../lib/formatters'
+import { formatNumber, stripMarkdown } from '../lib/formatters'
 import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
   BarChart, Bar, Cell, ReferenceLine,
@@ -16,10 +16,6 @@ type AnomalyResult    = components['schemas']['AnomalyResult']
 
 const CLUSTER_COLORS = ['#C96442', '#4A7FA5', '#6B8E5E', '#8B6E9A', '#C4943A', '#5E8A8A']
 
-// Format a number for axis ticks and tooltips: drop trailing zeros, cap at 2 decimal places.
-function fmtTick(v: number): string {
-  return parseFloat(v.toFixed(2)).toString()
-}
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -91,7 +87,7 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
               name={result.feature_x}
               domain={[xMin - xPad, xMax + xPad]}
               tickCount={5}
-              tickFormatter={fmtTick}
+              tickFormatter={formatNumber}
               label={{ value: result.feature_x, position: 'insideBottom', offset: -14, fill: 'var(--color-muted)', fontSize: 12 }}
               tick={axisTickStyle}
             />
@@ -101,14 +97,14 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
               name={result.feature_y}
               domain={[yMin - yPad, yMax + yPad]}
               tickCount={5}
-              tickFormatter={fmtTick}
+              tickFormatter={formatNumber}
               label={{ value: result.feature_y, angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
               tick={axisTickStyle}
             />
             <Tooltip
               contentStyle={tooltipStyle}
               cursor={{ strokeDasharray: '3 3' }}
-              formatter={(v, name) => [typeof v === 'number' ? fmtTick(v) : v, name]}
+              formatter={(v, name) => [typeof v === 'number' ? formatNumber(v) : v, name]}
             />
             {/* Single Scatter + Cell avoids the multi-series domain calculation
                 issue in Recharts where only the first series drives axis bounds. */}
@@ -159,7 +155,7 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
               name="Actual"
               domain={[minVal, maxVal]}
               tickCount={5}
-              tickFormatter={fmtTick}
+              tickFormatter={formatNumber}
               label={{ value: 'Actual', position: 'insideBottom', offset: -12, fill: 'var(--color-muted)', fontSize: 12 }}
               tick={axisTickStyle}
             />
@@ -169,14 +165,14 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
               name="Predicted"
               domain={[minVal, maxVal]}
               tickCount={5}
-              tickFormatter={fmtTick}
+              tickFormatter={formatNumber}
               label={{ value: 'Predicted', angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
               tick={axisTickStyle}
             />
             <Tooltip
               contentStyle={tooltipStyle}
               cursor={{ strokeDasharray: '3 3' }}
-              formatter={(v, name) => [typeof v === 'number' ? fmtTick(v) : v, name]}
+              formatter={(v, name) => [typeof v === 'number' ? formatNumber(v) : v, name]}
             />
             <ReferenceLine
               segment={[{ x: minVal, y: minVal }, { x: maxVal, y: maxVal }]}

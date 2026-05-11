@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 from datalens_ai.agent.infer_columns import infer_columns
 from datalens_ai.models.upload import ColumnType

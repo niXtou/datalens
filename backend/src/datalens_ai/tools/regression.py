@@ -1,10 +1,9 @@
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-from datalens_ai.config import SCATTER_SAMPLE
 from datalens_ai.models.results import RegressionResult
+from datalens_ai.tools.utils import sample_indices
 
 
 def run_regression(df: pd.DataFrame) -> RegressionResult:
@@ -20,11 +19,7 @@ def run_regression(df: pd.DataFrame) -> RegressionResult:
     y_pred = model.predict(X)
     score = r2_score(y, y_pred)
 
-    n = len(y)
-    if n > SCATTER_SAMPLE:
-        idx = np.sort(np.random.default_rng(42).choice(n, size=SCATTER_SAMPLE, replace=False))
-    else:
-        idx = np.arange(n)
+    idx = sample_indices(len(y))
 
     return RegressionResult(
         coefficients=model.coef_.tolist(),

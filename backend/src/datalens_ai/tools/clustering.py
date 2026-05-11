@@ -1,10 +1,9 @@
-import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
-from datalens_ai.config import SCATTER_SAMPLE
 from datalens_ai.models.results import ClusteringResult
+from datalens_ai.tools.utils import sample_indices
 
 
 def run_clustering(df: pd.DataFrame) -> ClusteringResult:
@@ -26,11 +25,7 @@ def run_clustering(df: pd.DataFrame) -> ClusteringResult:
         feature_y = "Row index"
         y_source = pd.Series(range(len(X)), name="Row index")
 
-    n = len(X)
-    if n > SCATTER_SAMPLE:
-        idx = np.sort(np.random.default_rng(42).choice(n, size=SCATTER_SAMPLE, replace=False))
-    else:
-        idx = np.arange(n)
+    idx = sample_indices(len(X))
 
     return ClusteringResult(
         cluster_labels=[int(labels[i]) for i in idx],

@@ -82,11 +82,10 @@ _ARRAY_FIELDS = {"cluster_labels", "x_values", "y_values", "actuals", "predicted
 
 def _scalar_summary(results: dict) -> str:
     """Return a JSON string with only scalar fields from each result."""
-    summary = {
-        k: {f: v for f, v in result.model_dump().items() if f not in _ARRAY_FIELDS}
-        for k, result in results.items()
-    }
-    return json.dumps(summary, indent=2)
+    return json.dumps(
+        {k: result.model_dump(exclude=_ARRAY_FIELDS) for k, result in results.items()},
+        indent=2,
+    )
 
 
 def summarize(state: AgentState) -> dict:

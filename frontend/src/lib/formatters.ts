@@ -13,6 +13,11 @@ export function formatScore(value: number): string {
   return value.toFixed(4)
 }
 
+// Drop trailing zeros after rounding to 2 decimal places (used for axis ticks and tooltips).
+export function formatNumber(v: number): string {
+  return parseFloat(v.toFixed(2)).toString()
+}
+
 export function stripMarkdown(text: string): string {
   return text
     .replace(/#{1,6}\s+/g, '')

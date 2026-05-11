@@ -56,7 +56,7 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
           const { done, value } = await reader.read()
           if (done) break
           for (const event of parseSseChunk(decoder.decode(value, { stream: true }))) {
-            if (event.type === 'step')  setLog(prev => [...prev, event.data])
+            if (event.type === 'step') setLog(prev => [...prev, event.data])
             else if (event.type === 'error') setError(`Agent error: ${event.data}`)
             else if (event.type === 'done') {
               setIsDone(true)
