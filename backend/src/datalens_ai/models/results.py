@@ -30,6 +30,7 @@ class AnomalyResult(BaseModel):
     anomaly_indices: list[int]
     contamination_rate: float
     anomaly_rows: list[dict[str, float]]
+    feature_stats: dict[str, dict[str, float]]  # per-column {mean, std} for z-score highlighting
 
 
 AnalysisResult = Annotated[

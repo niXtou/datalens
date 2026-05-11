@@ -65,26 +65,12 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
         <MetricCard label="Silhouette score" value={result.silhouette_score.toFixed(3)} />
       </div>
 
-      <div className="flex gap-4 flex-wrap">
-        {uniqueClusters.map((c, i) => (
-          <div key={c} className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full" style={{ background: CLUSTER_COLORS[i % CLUSTER_COLORS.length] }} />
-            <span style={{ fontSize: '0.78rem', color: 'var(--color-muted)' }}>Cluster {c}</span>
-          </div>
-        ))}
-      </div>
-
       <div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '4px' }}>
+        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
           {result.pca_projection
-            ? 'Axes are a PCA projection of all numeric features — the chart reflects the true cluster geometry.'
-            : 'Axes show the two numeric features. Each colour is one group.'}
+            ? 'Axes are a PCA projection of all numeric features (scaled). The chart reflects the true cluster geometry — each colour is one group.'
+            : 'Each colour is one cluster. Axes show the two numeric features.'}
         </p>
-        {result.pca_projection && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
-            PC1 and PC2 are the two directions that capture the most variance in your data.
-          </p>
-        )}
         <ResponsiveContainer width="100%" height={300}>
           <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
@@ -94,9 +80,9 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
               name={result.feature_x}
               domain={[xMin - xPad, xMax + xPad]}
               tickCount={5}
-              tickFormatter={formatNumber}
+              tickFormatter={result.pca_projection ? () => '' : formatNumber}
               label={{ value: result.feature_x, position: 'insideBottom', offset: -14, fill: 'var(--color-muted)', fontSize: 12 }}
-              tick={axisTickStyle}
+              tick={result.pca_projection ? false : axisTickStyle}
             />
             <YAxis
               dataKey="y"
@@ -104,9 +90,9 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
               name={result.feature_y}
               domain={[yMin - yPad, yMax + yPad]}
               tickCount={5}
-              tickFormatter={formatNumber}
+              tickFormatter={result.pca_projection ? () => '' : formatNumber}
               label={{ value: result.feature_y, angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
-              tick={axisTickStyle}
+              tick={result.pca_projection ? false : axisTickStyle}
             />
             <Tooltip
               contentStyle={tooltipStyle}
@@ -225,7 +211,13 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
 
 function AnomalyPanel({ result }: { result: AnomalyResult }) {
   const cols = result.anomaly_rows.length > 0 ? Object.keys(result.anomaly_rows[0]) : []
-  const displayed = result.anomaly_rows.slice(0, 20)
+  const displayed = result.anomaly_rows
+  const stats = result.feature_stats
+
+  function isExtreme(col: string, value: number): boolean {
+    const s = stats[col]
+    return !!s && s.std > 0 && Math.abs(value - s.mean) > 2 * s.std
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -275,7 +267,18 @@ function AnomalyPanel({ result }: { result: AnomalyResult }) {
                         {result.anomaly_indices[i]}
                       </td>
                       {cols.map(col => (
-                        <td key={col} style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'monospace', color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
+                        <td
+                          key={col}
+                          style={{
+                            padding: '8px 14px',
+                            textAlign: 'right',
+                            fontFamily: 'monospace',
+                            whiteSpace: 'nowrap',
+                            color: isExtreme(col, row[col]) ? 'var(--color-accent)' : 'var(--color-text)',
+                            background: isExtreme(col, row[col]) ? 'rgba(201, 100, 66, 0.08)' : undefined,
+                            fontWeight: isExtreme(col, row[col]) ? 600 : undefined,
+                          }}
+                        >
                           {formatNumber(row[col])}
                         </td>
                       ))}
@@ -283,7 +286,7 @@ function AnomalyPanel({ result }: { result: AnomalyResult }) {
                   ))}
                 </tbody>
               </table>
-              {result.anomaly_rows.length > 20 && (
+              {result.anomaly_indices.length > result.anomaly_rows.length && (
                 <div
                   style={{
                     padding: '9px 14px',
@@ -293,7 +296,7 @@ function AnomalyPanel({ result }: { result: AnomalyResult }) {
                     color: 'var(--color-subtle)',
                   }}
                 >
-                  +{result.anomaly_rows.length - 20} more flagged rows not shown
+                  Showing {result.anomaly_rows.length} of {result.anomaly_indices.length} flagged rows
                 </div>
               )}
             </div>
@@ -348,10 +351,10 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
   const anomaly    = resultEntries.find(([, v]) => v.type === 'anomaly')?.[1]    as AnomalyResult    | undefined
 
   const tabs = [
-    clustering && { id: 'clustering', label: 'Clustering' },
-    regression && { id: 'regression', label: 'Regression' },
-    anomaly    && { id: 'anomaly',    label: 'Anomaly'    },
-    data.summary && { id: 'summary', label: 'Summary'    },
+    data.summary && { id: 'summary',    label: 'Summary'    },
+    clustering   && { id: 'clustering', label: 'Clustering' },
+    regression   && { id: 'regression', label: 'Regression' },
+    anomaly      && { id: 'anomaly',    label: 'Anomaly'    },
   ].filter(Boolean) as { id: string; label: string }[]
 
   if (tabs.length === 0) return <p style={{ color: 'var(--color-muted)' }}>No results available.</p>

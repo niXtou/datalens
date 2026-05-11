@@ -142,6 +142,8 @@ def test_run_tool_anomaly(tmp_path):
     assert isinstance(anomaly.contamination_rate, float)
     assert isinstance(anomaly.anomaly_rows, list)
     assert len(anomaly.anomaly_rows) == len(anomaly.anomaly_indices)
+    assert "x" in anomaly.feature_stats
+    assert "mean" in anomaly.feature_stats["x"]
 
 
 def test_summarize():

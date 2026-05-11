@@ -3,18 +3,19 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import StandardScaler
 
 from datalens_ai.models.results import ClusteringResult
 from datalens_ai.tools.utils import sample_indices
 
 
-def _optimal_k(X: pd.DataFrame) -> int:
+def _optimal_k(X_scaled: np.ndarray) -> int:
     """Return the k in [2, min(6, n_rows-1)] with the highest silhouette score."""
     best_k, best_score = 2, -1.0
-    max_k = min(6, len(X) - 1)
+    max_k = min(6, len(X_scaled) - 1)
     for k in range(2, max_k + 1):
-        labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X)
-        score = silhouette_score(X, labels)
+        labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X_scaled)
+        score = silhouette_score(X_scaled, labels)
         if score > best_score:
             best_score, best_k = score, k
     return best_k
@@ -25,28 +26,31 @@ def run_clustering(df: pd.DataFrame) -> ClusteringResult:
     if len(X) < 2:
         raise ValueError("Clustering requires at least 2 rows of numeric data.")
 
-    n_clusters = _optimal_k(X) if len(X) >= 4 else min(2, len(X))
-    labels = KMeans(n_clusters=n_clusters, random_state=42, n_init=10).fit_predict(X)
-    score = silhouette_score(X, labels) if n_clusters > 1 else 0.0
+    # Scale before clustering so no single high-variance feature dominates.
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    n_clusters = _optimal_k(X_scaled) if len(X) >= 4 else min(2, len(X))
+    labels = KMeans(n_clusters=n_clusters, random_state=42, n_init=10).fit_predict(X_scaled)
+    score = silhouette_score(X_scaled, labels) if n_clusters > 1 else 0.0
 
     cols = X.columns.tolist()
     pca_projection = len(cols) > 2
 
     if pca_projection:
-        # Project all numeric features into 2D — the chart then reflects the
-        # actual clustering geometry instead of an arbitrary pair of columns.
+        # PCA on scaled data — chart reflects the true cluster geometry.
         pca = PCA(n_components=2, random_state=42)
-        coords = pca.fit_transform(X)
+        coords = pca.fit_transform(X_scaled)
         var = pca.explained_variance_ratio_
         x_coords = coords[:, 0]
         y_coords = coords[:, 1]
         feature_x = f"PC1 ({var[0] * 100:.1f}% var)"
         feature_y = f"PC2 ({var[1] * 100:.1f}% var)"
     elif len(cols) == 2:
+        # Non-PCA: use original (unscaled) values so axes show interpretable units.
         x_coords = X[cols[0]].values.astype(float)
         y_coords = X[cols[1]].values.astype(float)
         feature_x, feature_y = cols[0], cols[1]
-        pca_projection = False
     else:
         x_coords = X[cols[0]].values.astype(float)
         y_coords = np.arange(len(X), dtype=float)

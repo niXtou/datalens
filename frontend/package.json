@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "codegen": "openapi-typescript http://localhost:8000/openapi.json -o src/types/api.d.ts",
+    "codegen": "cd ../backend && OPENROUTER_API_KEY=dummy uv run python -c \"import json; from datalens_ai.main import app; print(json.dumps(app.openapi()))\" > ../frontend/openapi.json && cd ../frontend && openapi-typescript openapi.json -o src/types/api.d.ts && rm openapi.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

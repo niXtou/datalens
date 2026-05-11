@@ -80,7 +80,7 @@ def run_tool(state: AgentState) -> dict:
 _ARRAY_FIELDS = {
     "cluster_labels", "x_values", "y_values",
     "actuals", "predicted",
-    "standardized_coefficients", "anomaly_rows",
+    "standardized_coefficients", "anomaly_rows", "feature_stats",
 }
 
 

@@ -88,7 +88,15 @@ export interface components {
             /** Contamination Rate */
             contamination_rate: number;
             /** Anomaly Rows */
-            anomaly_rows: Record<string, number>[];
+            anomaly_rows: {
+                [key: string]: number;
+            }[];
+            /** Feature Stats */
+            feature_stats: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
         };
         /** Body_upload_file_upload_post */
         Body_upload_file_upload_post: {
@@ -116,7 +124,10 @@ export interface components {
             x_values: number[];
             /** Y Values */
             y_values: number[];
-            /** Pca Projection */
+            /**
+             * Pca Projection
+             * @default false
+             */
             pca_projection: boolean;
         };
         /** ColumnSchema */
