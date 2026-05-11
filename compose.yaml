@@ -30,8 +30,8 @@ services:
   api-prod:
     profiles: [prod]
     build:
-      context: .
-      dockerfile: ./backend/Dockerfile.prod
+      context: ./backend
+      dockerfile: Dockerfile.prod
     ports:
       - "8000:8000"
     environment:
@@ -41,10 +41,10 @@ services:
   frontend-prod:
     profiles: [prod]
     build:
-      context: .
-      dockerfile: ./frontend/Dockerfile.prod
+      context: ./frontend
+      dockerfile: Dockerfile.prod
       args:
-        - VITE_API_URL=http://localhost:8000
+        - VITE_API_URL=http://localhost:8000   # override default "" for local testing
     ports:
       - "80:80"
     depends_on:
