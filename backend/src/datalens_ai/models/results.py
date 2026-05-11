@@ -19,6 +19,7 @@ class RegressionResult(BaseModel):
     coefficients: list[float]
     standardized_coefficients: list[float]
     feature_names: list[str]
+    excluded_columns: list[str]
     target_name: str
     r2_score: float
     actuals: list[float]

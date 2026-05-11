@@ -171,3 +171,122 @@ def test_summarize():
 
     assert result["stream_log"] == ["Writing summary..."]
     assert result["summary"] == "The data has two clear groups."
+
+
+def test_summarize_empty_results_returns_graceful_message():
+    state = {
+        "csv_path": "",
+        "column_types": {},
+        "analyses_requested": [],
+        "results": {},
+        "stream_log": [],
+    }
+    result = summarize(state)
+
+    assert "No analyses" in result["summary"]
+    assert result["stream_log"] == ["No results to summarize."]
+
+
+def test_run_tool_skips_on_tool_error(tmp_path):
+    """When a tool raises ValueError, run_tool records the error in the stream log
+    but does not propagate the exception — remaining analyses still run."""
+    df = pd.DataFrame({"name": ["Alice", "Bob", "Carol"]})
+    csv_file = tmp_path / "cat_only.csv"
+    df.to_csv(csv_file, index=False)
+
+    state = {
+        "csv_path": str(csv_file),
+        "column_types": {},
+        "analyses_requested": ["run_anomaly"],
+        "results": {},
+        "stream_log": [],
+    }
+    result = run_tool(state)
+
+    assert result["analyses_requested"] == []
+    assert "run_anomaly" not in result["results"]
+    assert "skipped" in result["stream_log"][0].lower()
+
+
+def test_run_tool_regression_uses_target_column(tmp_path):
+    df = pd.DataFrame({
+        "a": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        "b": [6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        "c": [2.0, 4.0, 6.0, 8.0, 10.0, 12.0],
+    })
+    csv_file = tmp_path / "test.csv"
+    df.to_csv(csv_file, index=False)
+
+    state = {
+        "csv_path": str(csv_file),
+        "column_types": {},
+        "analyses_requested": ["run_regression"],
+        "results": {},
+        "stream_log": [],
+        "target_column": "a",  # override: use 'a' instead of last column 'c'
+        "summary": "",
+    }
+    result = run_tool(state)
+
+    regression = result["results"]["run_regression"]
+    assert isinstance(regression, RegressionResult)
+    assert regression.target_name == "a"
+
+
+def test_run_tool_regression_allows_class_label_target(tmp_path):
+    """A user-specified class_label column must not be excluded from regression."""
+    # Build a dataset with 30+ rows so wine_class-style detection triggers.
+    n = 30
+    df = pd.DataFrame({
+        "feature_a": list(range(n)),
+        "feature_b": [float(i) * 2 for i in range(n)],
+        "class_col": [i % 3 for i in range(n)],  # 3 unique ints, 30 rows → class_label
+    })
+    csv_file = tmp_path / "test.csv"
+    df.to_csv(csv_file, index=False)
+
+    state = {
+        "csv_path": str(csv_file),
+        "column_types": {},
+        "analyses_requested": ["run_regression"],
+        "results": {},
+        "stream_log": [],
+        "target_column": "class_col",
+        "summary": "",
+    }
+    result = run_tool(state)
+
+    regression = result["results"]["run_regression"]
+    assert isinstance(regression, RegressionResult)
+    assert regression.target_name == "class_col"
+    assert "class_col" not in regression.excluded_columns
+
+
+def test_analyses_override_skips_plan_analyses(tmp_path):
+    """When analyses_override=True the graph goes straight to run_tool,
+    never calling the LLM plan_analyses node."""
+    from datalens_ai.agent.graph import agent
+
+    df = pd.DataFrame({
+        "x": [1.0, 2.0, 3.0, 10.0, 11.0, 12.0],
+        "y": [1.0, 2.0, 3.0, 10.0, 11.0, 12.0],
+    })
+    csv_file = tmp_path / "test.csv"
+    df.to_csv(csv_file, index=False)
+
+    with patch("datalens_ai.agent.graph._llm") as mock_llm:
+        mock_llm.invoke.return_value.content = "Summary."
+        # plan_analyses must NOT be called
+        final = agent.invoke({
+            "csv_path": str(csv_file),
+            "column_types": {},
+            "analyses_requested": ["run_clustering"],
+            "analyses_override": True,
+            "results": {},
+            "stream_log": [],
+            "summary": "",
+        })
+
+    # structured_output (plan_analyses) was never called
+    mock_llm.with_structured_output.assert_not_called()
+    assert "run_clustering" in final["results"]

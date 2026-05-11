@@ -32,6 +32,9 @@ async def upload_file(file: UploadFile) -> UploadResponse:
     except Exception:
         raise HTTPException(status_code=422, detail="Could not parse file as CSV.")
 
+    if len(df) < 2:
+        raise HTTPException(status_code=422, detail="CSV must contain at least 2 data rows.")
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
         tmp.write(contents)
         tmp_path = tmp.name

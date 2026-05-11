@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { columnBadgeVariant, formatPercent, formatScore, stripMarkdown } from './formatters'
+import { columnBadgeVariant, formatPercent, formatScore, niceRange, stripMarkdown } from './formatters'
 
 describe('columnBadgeVariant', () => {
   it('returns numeric for numeric columns', () => {
@@ -41,6 +41,23 @@ describe('formatScore', () => {
   })
   it('handles perfect score', () => {
     expect(formatScore(1.0)).toBe('1.0000')
+  })
+})
+
+describe('niceRange', () => {
+  it('rounds MEDV-like range to clean tens', () => {
+    const [lo, hi] = niceRange(5, 50)
+    expect(lo).toBe(0)
+    expect(hi).toBe(50)
+  })
+  it('rounds proline-like range to clean hundreds', () => {
+    const [lo, hi] = niceRange(278, 1680)
+    expect(lo % 500).toBe(0)
+    expect(hi % 500).toBe(0)
+  })
+  it('handles equal min/max', () => {
+    const [lo, hi] = niceRange(5, 5)
+    expect(hi).toBeGreaterThan(lo)
   })
 })
 

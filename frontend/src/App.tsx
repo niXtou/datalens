@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import type { components } from './types/api'
 import UploadForm from './components/UploadForm'
 
-type AppStep = 'upload' | 'analyse' | 'results'
+type AppStep    = 'upload' | 'analyse' | 'results'
+type ColumnSchema = components['schemas']['ColumnSchema']
 
 const STEPS: { id: AppStep; label: string }[] = [
   { id: 'upload',  label: 'Upload' },
@@ -61,10 +63,11 @@ function Stepper({ current }: { current: AppStep }) {
 }
 
 export default function App() {
-  const [step, setStep]         = useState<AppStep>('upload')
-  const [fileId, setFileId]     = useState<string | null>(null)
+  const [step,    setStep]    = useState<AppStep>('upload')
+  const [fileId,  setFileId]  = useState<string | null>(null)
   const [filename, setFilename] = useState<string | null>(null)
-  const [apiOk, setApiOk]       = useState<boolean | null>(null)
+  const [columns, setColumns] = useState<ColumnSchema[]>([])
+  const [apiOk,   setApiOk]   = useState<boolean | null>(null)
 
   // Restore last completed analysis from localStorage so a page refresh
   // doesn't send the user back to the upload step.
@@ -72,9 +75,12 @@ export default function App() {
     const saved = localStorage.getItem(SESSION_KEY)
     if (saved) {
       try {
-        const { fileId: id, filename: name } = JSON.parse(saved) as { fileId: string; filename: string }
+        const { fileId: id, filename: name, columns: cols } = JSON.parse(saved) as {
+          fileId: string; filename: string; columns: ColumnSchema[]
+        }
         setFileId(id)
         setFilename(name)
+        setColumns(cols ?? [])
         setStep('results')
       } catch {
         localStorage.removeItem(SESSION_KEY)
@@ -88,23 +94,29 @@ export default function App() {
       .catch(() => setApiOk(false))
   }, [])
 
-  function handleUploaded(id: string, name: string) {
+  function handleUploaded(id: string, name: string, cols: ColumnSchema[]) {
     setFileId(id)
     setFilename(name)
+    setColumns(cols)
     setStep('analyse')
   }
 
   function handleAnalysisDone() {
     setStep('results')
     if (fileId && filename) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ fileId, filename }))
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ fileId, filename, columns }))
     }
+  }
+
+  function handleRerun() {
+    setStep('analyse')
   }
 
   function handleReset() {
     setStep('upload')
     setFileId(null)
     setFilename(null)
+    setColumns([])
     localStorage.removeItem(SESSION_KEY)
   }
 
@@ -147,8 +159,10 @@ export default function App() {
           step={step}
           fileId={fileId}
           filename={filename}
+          preloadedColumns={columns}
           onUploaded={handleUploaded}
           onAnalysisDone={handleAnalysisDone}
+          onRerun={handleRerun}
           onReset={handleReset}
         />
       </main>

@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader } from './ui/card'
 import { CheckCircle, Loader } from 'lucide-react'
-
-// Delay before transitioning to the results view after the stream completes,
-// giving the results endpoint time to persist before ResultsDashboard fetches it.
-const RESULTS_TRANSITION_DELAY_MS = 2500
+import { POLL_MAX_ATTEMPTS, POLL_INTERVAL_MS } from '../lib/constants'
 
 function parseSseChunk(raw: string) {
   return raw
@@ -13,32 +10,43 @@ function parseSseChunk(raw: string) {
     .map(line => JSON.parse(line.slice(6)))
 }
 
-interface Props {
-  fileId: string
-  onDone: () => void
+async function pollForResults(fileId: string, signal: AbortSignal): Promise<void> {
+  for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
+    if (signal.aborted) return
+    const r = await fetch(`${import.meta.env.VITE_API_URL}/results/${fileId}`, { signal })
+      .catch(() => null)
+    if (r?.ok) return
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+    if (signal.aborted) return
+  }
 }
 
-export default function AnalysisStream({ fileId, onDone }: Props) {
+interface Props {
+  fileId:       string
+  analyses:     string[]
+  targetColumn: string | null
+  force:        boolean
+  onDone:       () => void
+}
+
+export default function AnalysisStream({ fileId, analyses, targetColumn, force, onDone }: Props) {
   const [log, setLog]       = useState<string[]>([])
   const [isDone, setIsDone] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
-  // Stable ref so the stream closure always calls the latest onDone
-  // without including it in the effect deps (which would restart the stream).
   const onDoneRef = useRef(onDone)
   useEffect(() => { onDoneRef.current = onDone }, [onDone])
 
   useEffect(() => {
-    // AbortController lets us cancel the fetch on cleanup.
-    // React StrictMode in dev mounts → unmounts → remounts effects; without
-    // this the first request would keep running alongside the second, causing
-    // duplicate stream messages and two concurrent agent runs on the server.
+    // AbortController prevents duplicate agent runs on cleanup (React StrictMode double-mount).
     const controller = new AbortController()
 
     async function stream() {
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/analyse/${fileId}`, {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analyses, target_column: targetColumn, force }),
           signal: controller.signal,
         })
         if (!response.ok) {
@@ -56,11 +64,16 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
           const { done, value } = await reader.read()
           if (done) break
           for (const event of parseSseChunk(decoder.decode(value, { stream: true }))) {
-            if (event.type === 'step') setLog(prev => [...prev, event.data])
-            else if (event.type === 'error') setError(`Agent error: ${event.data}`)
-            else if (event.type === 'done') {
+            if (event.type === 'step') {
+              setLog(prev => [...prev, event.data])
+            } else if (event.type === 'error') {
+              setError(`Agent error: ${event.data}`)
+            } else if (event.type === 'done') {
               setIsDone(true)
-              setTimeout(() => onDoneRef.current(), RESULTS_TRANSITION_DELAY_MS)
+              // Poll until results are readable, then transition — more reliable
+              // than a fixed delay, and usually resolves in the first attempt.
+              await pollForResults(fileId, controller.signal)
+              if (!controller.signal.aborted) onDoneRef.current()
             }
           }
         }
@@ -72,10 +85,10 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
     stream()
 
     return () => controller.abort()
-  }, [fileId])
+  }, [fileId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fade-up">
       <div>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', marginBottom: '6px' }}>
           {isDone ? 'Analysis complete' : 'Agent is thinking…'}
@@ -105,7 +118,7 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
         </CardHeader>
         <CardContent>
           {error && (
-            <p style={{ color: '#c0392b', fontSize: '0.85rem' }}>{error}</p>
+            <p style={{ color: 'var(--color-error)', fontSize: '0.85rem' }}>{error}</p>
           )}
           <div className="flex flex-col gap-2">
             {log.map((msg, i) => (
@@ -114,10 +127,9 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
                 className="flex items-start gap-3 animate-fade-up"
                 style={{ animationDelay: `${i * 40}ms` }}
               >
-                <div
-                  className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{ background: 'var(--color-accent-muted)' }}
-                />
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-accent-muted)', marginRight: '2px', fontVariantNumeric: 'tabular-nums', flexShrink: 0, minWidth: '1.5rem', textAlign: 'right' }}>
+                  {i + 1}
+                </span>
                 <span style={{ fontSize: '0.875rem', color: 'var(--color-text)', lineHeight: '1.5' }}>
                   {msg}
                 </span>

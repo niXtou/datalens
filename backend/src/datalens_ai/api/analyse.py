@@ -1,17 +1,24 @@
 import asyncio
 import json
-import os
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from datalens_ai.agent.graph import agent
 from datalens_ai.api.upload import file_store
 from datalens_ai.models.results import ResultsResponse
 
-results_store: dict[str, dict] = {}  # fast in-memory cache
+
+class AnalyseRequest(BaseModel):
+    analyses: list[str] | None = None
+    target_column: str | None = None
+    force: bool = False  # re-run even when results already exist
+
+results_store: dict[str, dict] = {}
+_background_tasks: set[asyncio.Task] = set()
 
 _RESULTS_DIR = Path(tempfile.gettempdir()) / "datalens_ai_results"
 _RESULTS_DIR.mkdir(exist_ok=True)
@@ -34,19 +41,21 @@ def _load_from_disk(file_id: str) -> ResultsResponse | None:
     return ResultsResponse.model_validate(json.loads(path.read_text()))
 
 
-async def event_stream(csv_path: str, file_id: str):
-    # Queue carries step strings, an Exception on agent failure, or None as sentinel.
+async def event_stream(csv_path: str, file_id: str, request: AnalyseRequest):
     queue: asyncio.Queue[str | Exception | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
     def run_agent():
         try:
-            initial_state = {
+            initial_state: dict = {
                 "csv_path": csv_path,
                 "column_types": {},
-                "analyses_requested": [],
+                "analyses_requested": request.analyses if request.analyses is not None else [],
+                "analyses_override": request.analyses is not None,
+                "target_column": request.target_column,
                 "results": {},
                 "stream_log": [],
+                "summary": "",
             }
             final_results = {}
             final_summary = ""
@@ -61,18 +70,15 @@ async def event_stream(csv_path: str, file_id: str):
             stored = {"results": final_results, "summary": final_summary}
             results_store[file_id] = stored
             _persist(file_id, stored)
-            try:
-                os.unlink(csv_path)
-            except OSError:
-                pass
             loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel: success
         except Exception as exc:
             # Forward the exception through the queue so the generator can yield an
             # error event to the client instead of hanging on queue.get() forever.
             loop.call_soon_threadsafe(queue.put_nowait, exc)
 
-    # Hold a strong reference so the task is not garbage-collected mid-execution.
-    _task = asyncio.create_task(asyncio.to_thread(run_agent))  # noqa: F841
+    task = asyncio.create_task(asyncio.to_thread(run_agent))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     while True:
         msg = await queue.get()
@@ -87,11 +93,20 @@ async def event_stream(csv_path: str, file_id: str):
 
 
 @router.post("/analyse/{file_id}")
-async def analyse(file_id: str):
+async def analyse(file_id: str, request: AnalyseRequest = AnalyseRequest()):
+    # If results already exist and the caller isn't forcing a re-run, stream a
+    # lightweight replay so the client gets a valid done event without running
+    # the agent again.
+    if not request.force and (file_id in results_store or (_RESULTS_DIR / f"{file_id}.json").exists()):
+        async def _replay():
+            yield f"data: {json.dumps({'type': 'step', 'data': 'Results already available.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        return StreamingResponse(_replay(), media_type="text/event-stream")
+
     csv_path = file_store.get(file_id)
     if csv_path is None:
         raise HTTPException(status_code=404, detail="File not found")
-    return StreamingResponse(event_stream(csv_path, file_id), media_type="text/event-stream")
+    return StreamingResponse(event_stream(csv_path, file_id, request), media_type="text/event-stream")
 
 
 @router.get("/results/{file_id}", response_model=ResultsResponse)

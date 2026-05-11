@@ -6,6 +6,7 @@ class ColumnType(str, Enum):
     numeric = "numeric"
     categorical = "categorical"
     datetime = "datetime"
+    class_label = "class_label"  # low-cardinality integer — usable as regression target
 
 
 class ColumnSchema(BaseModel):

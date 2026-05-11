@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { components } from '../types/api'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Card, CardContent, CardHeader } from './ui/card'
 import { Badge } from './ui/badge'
-import { formatNumber, stripMarkdown } from '../lib/formatters'
+import { formatNumber, niceRange, stripMarkdown } from '../lib/formatters'
+import { downloadAnomalyCsv } from '../lib/downloads'
+import {
+  SCATTER_CHART_HEIGHT, REGRESSION_SCATTER_HEIGHT,
+  BAR_CHART_MIN_HEIGHT, BAR_CHART_ROW_HEIGHT,
+  AXIS_CHAR_WIDTH_PX, AXIS_MIN_WIDTH,
+} from '../lib/constants'
+import { Download } from 'lucide-react'
+import { Button } from './ui/button'
 import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
   BarChart, Bar, Cell, ReferenceLine,
@@ -41,22 +49,19 @@ const tooltipStyle = {
 const axisTickStyle = { fontSize: 12, fill: 'var(--color-subtle)' }
 
 function ClusteringPanel({ result }: { result: ClusteringResult }) {
-  const points = result.x_values.map((x, i) => ({
-    x,
-    y: result.y_values[i],
-    cluster: result.cluster_labels[i],
-  }))
-
-  const uniqueClusters = Array.from(new Set(result.cluster_labels)).sort((a, b) => a - b)
-
-  // Explicit domain with padding prevents Recharts from deriving bounds only
-  // from the first Scatter series, which caused other clusters to plot at zero.
-  const xMin = Math.min(...result.x_values)
-  const xMax = Math.max(...result.x_values)
-  const yMin = Math.min(...result.y_values)
-  const yMax = Math.max(...result.y_values)
-  const xPad = (xMax - xMin) * 0.08 || 1
-  const yPad = (yMax - yMin) * 0.08 || 1
+  const { points, xDomain, yDomain } = useMemo(() => {
+    const pts = result.x_values.map((x, i) => ({
+      x, y: result.y_values[i], cluster: result.cluster_labels[i],
+    }))
+    // niceRange rounds to clean tick intervals; PCA axes use raw bounds (ticks hidden).
+    const xD = result.pca_projection
+      ? [Math.min(...result.x_values) * 1.08, Math.max(...result.x_values) * 1.08] as [number, number]
+      : niceRange(Math.min(...result.x_values), Math.max(...result.x_values))
+    const yD = result.pca_projection
+      ? [Math.min(...result.y_values) * 1.08, Math.max(...result.y_values) * 1.08] as [number, number]
+      : niceRange(Math.min(...result.y_values), Math.max(...result.y_values))
+    return { points: pts, xDomain: xD, yDomain: yD }
+  }, [result])
 
   return (
     <div className="flex flex-col gap-5">
@@ -71,27 +76,27 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
             ? 'Axes are a PCA projection of all numeric features (scaled). The chart reflects the true cluster geometry — each colour is one group.'
             : 'Each colour is one cluster. Axes show the two numeric features.'}
         </p>
-        <ResponsiveContainer width="100%" height={300}>
-          <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 8 }}>
+        <ResponsiveContainer width="100%" height={SCATTER_CHART_HEIGHT}>
+          <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 24 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
             <XAxis
               dataKey="x"
               type="number"
               name={result.feature_x}
-              domain={[xMin - xPad, xMax + xPad]}
+              domain={xDomain}
               tickCount={5}
-              tickFormatter={result.pca_projection ? () => '' : formatNumber}
-              label={{ value: result.feature_x, position: 'insideBottom', offset: -14, fill: 'var(--color-muted)', fontSize: 12 }}
+              tickFormatter={formatNumber}
+              label={{ value: result.feature_x, position: 'insideBottom', offset: -14, style: { textAnchor: 'middle', fill: 'var(--color-muted)', fontSize: 12 } }}
               tick={result.pca_projection ? false : axisTickStyle}
             />
             <YAxis
               dataKey="y"
               type="number"
               name={result.feature_y}
-              domain={[yMin - yPad, yMax + yPad]}
+              domain={yDomain}
               tickCount={5}
-              tickFormatter={result.pca_projection ? () => '' : formatNumber}
-              label={{ value: result.feature_y, angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
+              tickFormatter={formatNumber}
+              label={{ value: result.feature_y, angle: -90, position: 'insideLeft', offset: 10, style: { textAnchor: 'middle', fill: 'var(--color-muted)', fontSize: 12 } }}
               tick={result.pca_projection ? false : axisTickStyle}
             />
             <Tooltip
@@ -114,23 +119,30 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
 }
 
 function RegressionPanel({ result }: { result: RegressionResult }) {
-  const coefData = result.standardized_coefficients.map((coef, i) => ({
-    name: result.feature_names[i] ?? `f${i}`,
-    coefficient: +coef.toFixed(4),
-  }))
-
-  const avpData = result.actuals.map((actual, i) => ({
-    actual,
-    predicted: result.predicted[i],
-  }))
-
-  const allVals = [...result.actuals, ...result.predicted]
-  const minVal = Math.min(...allVals)
-  const maxVal = Math.max(...allVals)
+  const { coefData, avpData, domMin, domMax, labelWidth } = useMemo(() => {
+    const coef = result.standardized_coefficients.map((c, i) => ({
+      name: result.feature_names[i] ?? `f${i}`, coefficient: +c.toFixed(4),
+    }))
+    const avp = result.actuals.map((actual, i) => ({ actual, predicted: result.predicted[i] }))
+    const [mn, mx] = niceRange(
+      Math.min(...result.actuals, ...result.predicted),
+      Math.max(...result.actuals, ...result.predicted),
+    )
+    const lw = coef.length > 0
+      ? Math.max(AXIS_MIN_WIDTH, Math.max(...coef.map(d => d.name.length)) * AXIS_CHAR_WIDTH_PX)
+      : AXIS_MIN_WIDTH
+    return { coefData: coef, avpData: avp, domMin: mn, domMax: mx, labelWidth: lw }
+  }, [result])
 
   return (
     <div className="flex flex-col gap-5">
       <MetricCard label="R² score" value={result.r2_score.toFixed(4)} />
+
+      {result.excluded_columns.length > 0 && (
+        <p style={{ fontSize: '0.78rem', color: 'var(--color-subtle)' }}>
+          Excluded as class labels: <strong style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono, monospace)' }}>{result.excluded_columns.join(', ')}</strong>
+        </p>
+      )}
 
       <div>
         <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '4px' }}>
@@ -139,27 +151,27 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
         <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
           Points on the dashed line = perfect prediction. Tighter cluster = better model.
         </p>
-        <ResponsiveContainer width="100%" height={280}>
-          <ScatterChart margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
+        <ResponsiveContainer width="100%" height={REGRESSION_SCATTER_HEIGHT}>
+          <ScatterChart margin={{ top: 8, right: 16, bottom: 24, left: 24 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
             <XAxis
               dataKey="actual"
               type="number"
               name="Actual"
-              domain={[minVal, maxVal]}
+              domain={[domMin, domMax]}
               tickCount={5}
               tickFormatter={formatNumber}
-              label={{ value: 'Actual', position: 'insideBottom', offset: -12, fill: 'var(--color-muted)', fontSize: 12 }}
+              label={{ value: 'Actual', position: 'insideBottom', offset: -12, style: { textAnchor: 'middle', fill: 'var(--color-muted)', fontSize: 12 } }}
               tick={axisTickStyle}
             />
             <YAxis
               dataKey="predicted"
               type="number"
               name="Predicted"
-              domain={[minVal, maxVal]}
+              domain={[domMin, domMax]}
               tickCount={5}
               tickFormatter={formatNumber}
-              label={{ value: 'Predicted', angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
+              label={{ value: 'Predicted', angle: -90, position: 'insideLeft', offset: 10, style: { textAnchor: 'middle', fill: 'var(--color-muted)', fontSize: 12 } }}
               tick={axisTickStyle}
             />
             <Tooltip
@@ -168,7 +180,7 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
               formatter={(v, name) => [typeof v === 'number' ? formatNumber(v) : v, name]}
             />
             <ReferenceLine
-              segment={[{ x: minVal, y: minVal }, { x: maxVal, y: maxVal }]}
+              segment={[{ x: domMin, y: domMin }, { x: domMax, y: domMax }]}
               stroke="var(--color-border)"
               strokeDasharray="5 5"
               strokeWidth={1.5}
@@ -186,11 +198,16 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
           <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
             Each bar = how many σ the prediction shifts when that feature increases by 1σ. Bars are comparable across features.
           </p>
-          <ResponsiveContainer width="100%" height={Math.max(180, coefData.length * 40)}>
+          <ResponsiveContainer width="100%" height={Math.max(BAR_CHART_MIN_HEIGHT, coefData.length * BAR_CHART_ROW_HEIGHT)}>
             <BarChart data={coefData} layout="vertical" margin={{ top: 4, right: 32, bottom: 4, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" horizontal={false} />
               <XAxis type="number" tick={axisTickStyle} />
-              <YAxis type="category" dataKey="name" tick={axisTickStyle} width={80} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={{ ...axisTickStyle, fontFamily: 'monospace' }}
+                width={labelWidth}
+              />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="coefficient" radius={[0, 4, 4, 0]}>
                 {coefData.map((entry, i) => (
@@ -209,10 +226,10 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
   )
 }
 
-function AnomalyPanel({ result }: { result: AnomalyResult }) {
-  const cols = result.anomaly_rows.length > 0 ? Object.keys(result.anomaly_rows[0]) : []
+function AnomalyPanel({ result, filename }: { result: AnomalyResult; filename: string }) {
+  const cols     = result.anomaly_rows.length > 0 ? Object.keys(result.anomaly_rows[0]) : []
   const displayed = result.anomaly_rows
-  const stats = result.feature_stats
+  const stats    = result.feature_stats
 
   function isExtreme(col: string, value: number): boolean {
     const s = stats[col]
@@ -225,6 +242,15 @@ function AnomalyPanel({ result }: { result: AnomalyResult }) {
         <MetricCard label="Anomalies detected" value={String(result.anomaly_indices.length)} />
         <MetricCard label="Contamination rate" value={`${(result.contamination_rate * 100).toFixed(1)}%`} />
       </div>
+
+      {displayed.length > 0 && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => downloadAnomalyCsv(result, filename)}>
+            <Download size={13} />
+            Download CSV
+          </Button>
+        </div>
+      )}
 
       {displayed.length === 0 ? (
         <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)' }}>No anomalies detected.</p>
@@ -266,22 +292,25 @@ function AnomalyPanel({ result }: { result: AnomalyResult }) {
                       <td style={{ padding: '8px 14px', fontFamily: 'monospace', color: 'var(--color-subtle)', borderRight: '1px solid var(--color-border-light)', whiteSpace: 'nowrap' }}>
                         {result.anomaly_indices[i]}
                       </td>
-                      {cols.map(col => (
-                        <td
-                          key={col}
-                          style={{
-                            padding: '8px 14px',
-                            textAlign: 'right',
-                            fontFamily: 'monospace',
-                            whiteSpace: 'nowrap',
-                            color: isExtreme(col, row[col]) ? 'var(--color-accent)' : 'var(--color-text)',
-                            background: isExtreme(col, row[col]) ? 'rgba(201, 100, 66, 0.08)' : undefined,
-                            fontWeight: isExtreme(col, row[col]) ? 600 : undefined,
-                          }}
-                        >
-                          {formatNumber(row[col])}
-                        </td>
-                      ))}
+                      {cols.map(col => {
+                        const extreme = isExtreme(col, row[col])
+                        return (
+                          <td
+                            key={col}
+                            style={{
+                              padding: '8px 14px',
+                              textAlign: 'right',
+                              fontFamily: 'monospace',
+                              whiteSpace: 'nowrap',
+                              color:      extreme ? 'var(--color-accent)' : 'var(--color-text)',
+                              background: extreme ? 'var(--color-accent-highlight)' : undefined,
+                              fontWeight: extreme ? 600 : undefined,
+                            }}
+                          >
+                            {formatNumber(row[col])}
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -326,18 +355,28 @@ function SummaryPanel({ summary }: { summary: string }) {
   )
 }
 
-export default function ResultsDashboard({ fileId }: { fileId: string }) {
+export default function ResultsDashboard({
+  fileId,
+  filename,
+  onDataLoaded,
+}: {
+  fileId: string
+  filename: string
+  onDataLoaded?: (data: ResultsResponse) => void
+}) {
   const [data, setData]   = useState<ResultsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setData(null)
+    setError(null)
     fetch(`${import.meta.env.VITE_API_URL}/results/${fileId}`)
       .then(r => { if (!r.ok) throw new Error(`Server error: ${r.status}`); return r.json() })
-      .then(setData)
+      .then((d: ResultsResponse) => { setData(d); onDataLoaded?.(d) })
       .catch(err => setError(String(err)))
-  }, [fileId])
+  }, [fileId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return <p style={{ color: '#c0392b', fontSize: '0.875rem' }}>{error}</p>
+  if (error) return <p style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>{error}</p>
   if (!data) return (
     <div className="flex items-center gap-2 py-8">
       <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" style={{ animation: 'pulse-dot 1s ease-in-out infinite' }} />
@@ -398,7 +437,7 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
               <p style={{ fontWeight: 500, fontSize: '0.95rem' }}>Anomaly Detection</p>
               <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>IsolationForest — rows that look unusual compared to the rest</p>
             </CardHeader>
-            <CardContent><AnomalyPanel result={anomaly} /></CardContent>
+            <CardContent><AnomalyPanel result={anomaly} filename={filename} /></CardContent>
           </Card>
         </TabsContent>
       )}

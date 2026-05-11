@@ -16,8 +16,11 @@
   --color-accent-soft:  #FDF0EB;
   --color-accent-muted: #E8C4B0;
 
-  --color-success:      #5A7A5A;
-  --color-success-soft: #EDF3ED;
+  --color-success:          #5A7A5A;
+  --color-success-soft:     #EDF3ED;
+
+  --color-error:            #c0392b;
+  --color-accent-highlight: rgba(201, 100, 66, 0.08); /* accent at 8% — extreme cell bg */
 
   --font-display: 'Instrument Serif', Georgia, serif;
   --font-body:    'DM Sans', system-ui, sans-serif;

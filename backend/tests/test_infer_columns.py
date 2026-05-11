@@ -42,3 +42,33 @@ def test_datetime_as_string():
     assert len(result) == 1
     assert result[0].name == "event_date"
     assert result[0].column_type == ColumnType.datetime
+
+
+def test_bool_column_is_categorical():
+    df = pd.DataFrame({"active": [True, False, True, True, False]})
+    result = infer_columns(df)
+
+    assert result[0].column_type == ColumnType.categorical
+
+
+def test_low_cardinality_int_is_class_label():
+    df = pd.DataFrame({"label": list(range(3)) * 10})  # 30 rows, 3 unique ints
+    result = infer_columns(df)
+
+    assert result[0].column_type == ColumnType.class_label
+
+
+def test_low_cardinality_int_small_dataset_is_numeric():
+    # Fewer than 30 rows → not enough to be confident it's a class label
+    df = pd.DataFrame({"label": list(range(3)) * 9})  # 27 rows
+    result = infer_columns(df)
+
+    assert result[0].column_type == ColumnType.numeric
+
+
+def test_zero_row_csv_returns_schemas():
+    df = pd.DataFrame(columns=["a", "b", "c"])
+    result = infer_columns(df)
+
+    assert len(result) == 3
+    assert all(s.column_type == ColumnType.categorical for s in result)

@@ -140,7 +140,7 @@ export interface components {
          * ColumnType
          * @enum {string}
          */
-        ColumnType: "numeric" | "categorical" | "datetime";
+        ColumnType: "numeric" | "categorical" | "datetime" | "class_label";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -159,6 +159,8 @@ export interface components {
             standardized_coefficients: number[];
             /** Feature Names */
             feature_names: string[];
+            /** Excluded Columns */
+            excluded_columns: string[];
             /** Target Name */
             target_name: string;
             /** R2 Score */
