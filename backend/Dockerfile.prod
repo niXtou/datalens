@@ -1,17 +1,31 @@
-FROM python:3.13-slim
+# ── Stage 1: Builder ──────────────────────────────────────────────────────────
+FROM python:3.13-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:0.10.12 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-RUN pip install uv
+# Copy manifests first — Docker caches this layer until deps change
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --frozen --no-dev --no-install-project
 
-COPY backend/pyproject.toml backend/uv.lock ./
+# Copy source, then install the project itself as a proper wheel (no PYTHONPATH hack)
+COPY src/ src/
+RUN uv sync --frozen --no-dev --no-editable
 
-# Install only production dependencies (excludes the dev optional group)
-RUN uv sync --frozen --no-dev
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM python:3.13-slim AS runtime
 
-COPY backend/src ./src
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+WORKDIR /app
 
-ENV PYTHONPATH=/app/src
+# Only the venv is needed — datalens_ai is installed into site-packages via --no-editable
+COPY --from=builder /app/.venv /app/.venv
 
-# No --reload in production
-CMD ["uv", "run", "uvicorn", "datalens_ai.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+
+USER appuser
+EXPOSE 8000
+
+CMD ["uvicorn", "datalens_ai.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
