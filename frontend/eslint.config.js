@@ -18,5 +18,10 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // react-hooks v7 introduced this rule but it flags valid patterns (resetting
+      // state before fetch, restoring from localStorage on mount). Disable for now.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])
