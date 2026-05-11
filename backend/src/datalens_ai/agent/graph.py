@@ -77,7 +77,11 @@ def run_tool(state: AgentState) -> dict:
 
 # Fields that carry raw data points — excluded from the LLM prompt to avoid
 # wasting tokens on numbers the model can't meaningfully interpret.
-_ARRAY_FIELDS = {"cluster_labels", "x_values", "y_values", "actuals", "predicted"}
+_ARRAY_FIELDS = {
+    "cluster_labels", "x_values", "y_values",
+    "actuals", "predicted",
+    "standardized_coefficients", "anomaly_rows",
+}
 
 
 def _scalar_summary(results: dict) -> str:

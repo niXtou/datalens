@@ -9,6 +9,8 @@ const STEPS: { id: AppStep; label: string }[] = [
   { id: 'results', label: 'Results' },
 ]
 
+const SESSION_KEY = 'datalens_session'
+
 function Stepper({ current }: { current: AppStep }) {
   const currentIdx = STEPS.findIndex(s => s.id === current)
 
@@ -59,15 +61,52 @@ function Stepper({ current }: { current: AppStep }) {
 }
 
 export default function App() {
-  const [step, setStep]     = useState<AppStep>('upload')
-  const [fileId, setFileId] = useState<string | null>(null)
-  const [apiOk, setApiOk]   = useState<boolean | null>(null)
+  const [step, setStep]         = useState<AppStep>('upload')
+  const [fileId, setFileId]     = useState<string | null>(null)
+  const [filename, setFilename] = useState<string | null>(null)
+  const [apiOk, setApiOk]       = useState<boolean | null>(null)
+
+  // Restore last completed analysis from localStorage so a page refresh
+  // doesn't send the user back to the upload step.
+  useEffect(() => {
+    const saved = localStorage.getItem(SESSION_KEY)
+    if (saved) {
+      try {
+        const { fileId: id, filename: name } = JSON.parse(saved) as { fileId: string; filename: string }
+        setFileId(id)
+        setFilename(name)
+        setStep('results')
+      } catch {
+        localStorage.removeItem(SESSION_KEY)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/health`)
       .then(() => setApiOk(true))
       .catch(() => setApiOk(false))
   }, [])
+
+  function handleUploaded(id: string, name: string) {
+    setFileId(id)
+    setFilename(name)
+    setStep('analyse')
+  }
+
+  function handleAnalysisDone() {
+    setStep('results')
+    if (fileId && filename) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ fileId, filename }))
+    }
+  }
+
+  function handleReset() {
+    setStep('upload')
+    setFileId(null)
+    setFilename(null)
+    localStorage.removeItem(SESSION_KEY)
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -107,9 +146,10 @@ export default function App() {
         <UploadForm
           step={step}
           fileId={fileId}
-          onUploaded={(id) => { setFileId(id); setStep('analyse') }}
-          onAnalysisDone={() => setStep('results')}
-          onReset={() => { setStep('upload'); setFileId(null) }}
+          filename={filename}
+          onUploaded={handleUploaded}
+          onAnalysisDone={handleAnalysisDone}
+          onReset={handleReset}
         />
       </main>
 

@@ -83,9 +83,10 @@ def test_run_tool_clustering(tmp_path):
     assert result["analyses_requested"] == []
     assert len(clustering.cluster_labels) == 6
     assert isinstance(clustering.silhouette_score, float)
-    assert clustering.n_clusters == 3
+    assert 2 <= clustering.n_clusters <= 6
     assert clustering.feature_x == "x"
     assert clustering.feature_y == "y"
+    assert not clustering.pca_projection  # only 2 columns — no PCA
     assert len(clustering.x_values) == 6
     assert len(clustering.y_values) == 6
 
@@ -115,6 +116,7 @@ def test_run_tool_regression(tmp_path):
     assert regression.target_name == "y"
     assert len(regression.actuals) == 6
     assert len(regression.predicted) == 6
+    assert len(regression.standardized_coefficients) == 1
 
 
 def test_run_tool_anomaly(tmp_path):
@@ -138,6 +140,8 @@ def test_run_tool_anomaly(tmp_path):
     anomaly = result["results"]["run_anomaly"]
     assert isinstance(anomaly, AnomalyResult)
     assert isinstance(anomaly.contamination_rate, float)
+    assert isinstance(anomaly.anomaly_rows, list)
+    assert len(anomaly.anomaly_rows) == len(anomaly.anomaly_indices)
 
 
 def test_summarize():

@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import tempfile
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -9,9 +11,27 @@ from datalens_ai.agent.graph import agent
 from datalens_ai.api.upload import file_store
 from datalens_ai.models.results import ResultsResponse
 
-results_store: dict[str, dict] = {}  # file_id → results; in-memory, not for production
+results_store: dict[str, dict] = {}  # fast in-memory cache
+
+_RESULTS_DIR = Path(tempfile.gettempdir()) / "datalens_ai_results"
+_RESULTS_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
+
+
+def _persist(file_id: str, data: dict) -> None:
+    payload = {
+        "results": {k: v.model_dump() for k, v in data["results"].items()},
+        "summary": data["summary"],
+    }
+    (_RESULTS_DIR / f"{file_id}.json").write_text(json.dumps(payload))
+
+
+def _load_from_disk(file_id: str) -> ResultsResponse | None:
+    path = _RESULTS_DIR / f"{file_id}.json"
+    if not path.exists():
+        return None
+    return ResultsResponse.model_validate(json.loads(path.read_text()))
 
 
 async def event_stream(csv_path: str, file_id: str):
@@ -38,7 +58,9 @@ async def event_stream(csv_path: str, file_id: str):
                         final_results = node_output["results"]
                     if "summary" in node_output:
                         final_summary = node_output["summary"]
-            results_store[file_id] = {"results": final_results, "summary": final_summary}
+            stored = {"results": final_results, "summary": final_summary}
+            results_store[file_id] = stored
+            _persist(file_id, stored)
             try:
                 os.unlink(csv_path)
             except OSError:
@@ -75,6 +97,11 @@ async def analyse(file_id: str):
 @router.get("/results/{file_id}", response_model=ResultsResponse)
 async def get_results(file_id: str):
     stored = results_store.get(file_id)
-    if stored is None:
+    if stored is not None:
+        return ResultsResponse(results=stored["results"], summary=stored["summary"])
+    # Fall back to disk — survives server restart or page refresh after the
+    # in-memory cache is cleared.
+    from_disk = _load_from_disk(file_id)
+    if from_disk is None:
         raise HTTPException(status_code=404, detail="Results not found")
-    return ResultsResponse(results=stored["results"], summary=stored["summary"])
+    return from_disk

@@ -14,7 +14,8 @@ type AppStep        = 'upload' | 'analyse' | 'results'
 interface Props {
   step:            AppStep
   fileId:          string | null
-  onUploaded:      (fileId: string) => void
+  filename:        string | null
+  onUploaded:      (fileId: string, filename: string) => void
   onAnalysisDone:  () => void
   onReset:         () => void
 }
@@ -26,7 +27,7 @@ function columnBadgeVariant(type: string) {
   return 'muted' as const
 }
 
-export default function UploadForm({ step, fileId, onUploaded, onAnalysisDone, onReset }: Props) {
+export default function UploadForm({ step, fileId, filename, onUploaded, onAnalysisDone, onReset }: Props) {
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading]       = useState(false)
@@ -155,7 +156,7 @@ export default function UploadForm({ step, fileId, onUploaded, onAnalysisDone, o
         {uploadResult && (
           <Button
             size="full"
-            onClick={() => onUploaded(uploadResult.file_id)}
+            onClick={() => onUploaded(uploadResult.file_id, selectedFile?.name ?? uploadResult.file_id)}
             className="animate-fade-up"
           >
             {uploading ? 'Uploading…' : 'Run Analysis'}
@@ -191,7 +192,7 @@ export default function UploadForm({ step, fileId, onUploaded, onAnalysisDone, o
               Analysis results
             </h2>
             <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-              {selectedFile?.name ?? 'Your dataset'}
+              {filename ?? selectedFile?.name ?? 'Your dataset'}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={onReset}>

@@ -75,9 +75,16 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
       </div>
 
       <div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
-          Axes show the first two numeric features. Each colour is one group.
+        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '4px' }}>
+          {result.pca_projection
+            ? 'Axes are a PCA projection of all numeric features — the chart reflects the true cluster geometry.'
+            : 'Axes show the two numeric features. Each colour is one group.'}
         </p>
+        {result.pca_projection && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
+            PC1 and PC2 are the two directions that capture the most variance in your data.
+          </p>
+        )}
         <ResponsiveContainer width="100%" height={300}>
           <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
@@ -121,7 +128,7 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
 }
 
 function RegressionPanel({ result }: { result: RegressionResult }) {
-  const coefData = result.coefficients.map((coef, i) => ({
+  const coefData = result.standardized_coefficients.map((coef, i) => ({
     name: result.feature_names[i] ?? `f${i}`,
     coefficient: +coef.toFixed(4),
   }))
@@ -187,8 +194,11 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
 
       {coefData.length > 0 && (
         <div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
-            Feature coefficients — how much each input shifts the prediction
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '4px' }}>
+            Standardized feature importance
+          </p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
+            Each bar = how many σ the prediction shifts when that feature increases by 1σ. Bars are comparable across features.
           </p>
           <ResponsiveContainer width="100%" height={Math.max(180, coefData.length * 40)}>
             <BarChart data={coefData} layout="vertical" margin={{ top: 4, right: 32, bottom: 4, left: 8 }}>
@@ -214,65 +224,82 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
 }
 
 function AnomalyPanel({ result }: { result: AnomalyResult }) {
+  const cols = result.anomaly_rows.length > 0 ? Object.keys(result.anomaly_rows[0]) : []
+  const displayed = result.anomaly_rows.slice(0, 20)
+
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-3">
-        <MetricCard label="Contamination rate" value={`${(result.contamination_rate * 100).toFixed(1)}%`} />
         <MetricCard label="Anomalies detected" value={String(result.anomaly_indices.length)} />
+        <MetricCard label="Contamination rate" value={`${(result.contamination_rate * 100).toFixed(1)}%`} />
       </div>
-      <div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
-          Row indices flagged as anomalies by IsolationForest
-        </p>
-        <div
-          className="rounded-[var(--radius-md)] overflow-hidden"
-          style={{ border: '1px solid var(--color-border)' }}
-        >
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead>
-              <tr style={{ background: 'var(--color-background)' }}>
-                <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-muted)', fontWeight: 500, fontSize: '0.78rem' }}>
-                  Row index
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-muted)', fontWeight: 500, fontSize: '0.78rem' }}>
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.anomaly_indices.slice(0, 20).map((idx, i) => (
-                <tr
-                  key={idx}
+
+      {displayed.length === 0 ? (
+        <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)' }}>No anomalies detected.</p>
+      ) : (
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '4px' }}>
+            Actual values for flagged rows
+          </p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
+            These rows were identified as outliers by IsolationForest. Look for values that seem extreme compared to the rest.
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <div
+              className="rounded-[var(--radius-md)] overflow-hidden"
+              style={{ border: '1px solid var(--color-border)', minWidth: 'max-content' }}
+            >
+              <table style={{ borderCollapse: 'collapse', fontSize: '0.8rem', width: '100%' }}>
+                <thead>
+                  <tr style={{ background: 'var(--color-background)' }}>
+                    <th style={{ padding: '9px 14px', textAlign: 'left', color: 'var(--color-muted)', fontWeight: 500, whiteSpace: 'nowrap', borderRight: '1px solid var(--color-border-light)' }}>
+                      Row #
+                    </th>
+                    {cols.map(col => (
+                      <th key={col} style={{ padding: '9px 14px', textAlign: 'right', color: 'var(--color-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayed.map((row, i) => (
+                    <tr
+                      key={i}
+                      style={{
+                        background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-background)',
+                        borderTop: '1px solid var(--color-border-light)',
+                      }}
+                    >
+                      <td style={{ padding: '8px 14px', fontFamily: 'monospace', color: 'var(--color-subtle)', borderRight: '1px solid var(--color-border-light)', whiteSpace: 'nowrap' }}>
+                        {result.anomaly_indices[i]}
+                      </td>
+                      {cols.map(col => (
+                        <td key={col} style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'monospace', color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
+                          {formatNumber(row[col])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {result.anomaly_rows.length > 20 && (
+                <div
                   style={{
-                    background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-background)',
+                    padding: '9px 14px',
+                    background: 'var(--color-background)',
                     borderTop: '1px solid var(--color-border-light)',
+                    fontSize: '0.78rem',
+                    color: 'var(--color-subtle)',
                   }}
                 >
-                  <td style={{ padding: '9px 16px', fontFamily: 'monospace', color: 'var(--color-text)' }}>
-                    {idx}
-                  </td>
-                  <td style={{ padding: '9px 16px' }}>
-                    <Badge variant="default" style={{ fontSize: '0.72rem' }}>anomaly</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {result.anomaly_indices.length > 20 && (
-            <div
-              style={{
-                padding: '10px 16px',
-                background: 'var(--color-background)',
-                borderTop: '1px solid var(--color-border-light)',
-                fontSize: '0.8rem',
-                color: 'var(--color-subtle)',
-              }}
-            >
-              +{result.anomaly_indices.length - 20} more rows
+                  +{result.anomaly_rows.length - 20} more flagged rows not shown
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

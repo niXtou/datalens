@@ -11,11 +11,13 @@ class ClusteringResult(BaseModel):
     feature_y: str
     x_values: list[float]
     y_values: list[float]
+    pca_projection: bool = False
 
 
 class RegressionResult(BaseModel):
     type: Literal["regression"] = "regression"
     coefficients: list[float]
+    standardized_coefficients: list[float]
     feature_names: list[str]
     target_name: str
     r2_score: float
@@ -27,6 +29,7 @@ class AnomalyResult(BaseModel):
     type: Literal["anomaly"] = "anomaly"
     anomaly_indices: list[int]
     contamination_rate: float
+    anomaly_rows: list[dict[str, float]]
 
 
 AnalysisResult = Annotated[

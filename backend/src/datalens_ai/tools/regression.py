@@ -19,10 +19,17 @@ def run_regression(df: pd.DataFrame) -> RegressionResult:
     y_pred = model.predict(X)
     score = r2_score(y, y_pred)
 
+    # Standardised coefficients: coef * std(Xᵢ) / std(y)
+    # Comparable across features regardless of their original scale.
+    x_std = X.std()
+    y_std = float(y.std()) or 1.0
+    std_coefs = (model.coef_ * x_std.values / y_std).tolist()
+
     idx = sample_indices(len(y))
 
     return RegressionResult(
         coefficients=model.coef_.tolist(),
+        standardized_coefficients=std_coefs,
         feature_names=X.columns.tolist(),
         target_name=str(y.name),
         r2_score=float(score),

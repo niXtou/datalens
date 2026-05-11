@@ -87,6 +87,8 @@ export interface components {
             anomaly_indices: number[];
             /** Contamination Rate */
             contamination_rate: number;
+            /** Anomaly Rows */
+            anomaly_rows: Record<string, number>[];
         };
         /** Body_upload_file_upload_post */
         Body_upload_file_upload_post: {
@@ -114,6 +116,8 @@ export interface components {
             x_values: number[];
             /** Y Values */
             y_values: number[];
+            /** Pca Projection */
+            pca_projection: boolean;
         };
         /** ColumnSchema */
         ColumnSchema: {
@@ -140,6 +144,8 @@ export interface components {
             type: "regression";
             /** Coefficients */
             coefficients: number[];
+            /** Standardized Coefficients */
+            standardized_coefficients: number[];
             /** Feature Names */
             feature_names: string[];
             /** Target Name */

@@ -1,9 +1,23 @@
+import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
 from datalens_ai.models.results import ClusteringResult
 from datalens_ai.tools.utils import sample_indices
+
+
+def _optimal_k(X: pd.DataFrame) -> int:
+    """Return the k in [2, min(6, n_rows-1)] with the highest silhouette score."""
+    best_k, best_score = 2, -1.0
+    max_k = min(6, len(X) - 1)
+    for k in range(2, max_k + 1):
+        labels = KMeans(n_clusters=k, random_state=42, n_init=10).fit_predict(X)
+        score = silhouette_score(X, labels)
+        if score > best_score:
+            best_score, best_k = score, k
+    return best_k
 
 
 def run_clustering(df: pd.DataFrame) -> ClusteringResult:
@@ -11,19 +25,33 @@ def run_clustering(df: pd.DataFrame) -> ClusteringResult:
     if len(X) < 2:
         raise ValueError("Clustering requires at least 2 rows of numeric data.")
 
-    n_clusters = min(3, len(X))
-    labels = KMeans(n_clusters=n_clusters, random_state=42).fit_predict(X)
+    n_clusters = _optimal_k(X) if len(X) >= 4 else min(2, len(X))
+    labels = KMeans(n_clusters=n_clusters, random_state=42, n_init=10).fit_predict(X)
     score = silhouette_score(X, labels) if n_clusters > 1 else 0.0
 
     cols = X.columns.tolist()
-    feature_x = cols[0]
-    # Use second numeric column for Y axis; fall back to row index if only one column.
-    if len(cols) >= 2:
-        feature_y = cols[1]
-        y_source = X[feature_y]
+    pca_projection = len(cols) > 2
+
+    if pca_projection:
+        # Project all numeric features into 2D — the chart then reflects the
+        # actual clustering geometry instead of an arbitrary pair of columns.
+        pca = PCA(n_components=2, random_state=42)
+        coords = pca.fit_transform(X)
+        var = pca.explained_variance_ratio_
+        x_coords = coords[:, 0]
+        y_coords = coords[:, 1]
+        feature_x = f"PC1 ({var[0] * 100:.1f}% var)"
+        feature_y = f"PC2 ({var[1] * 100:.1f}% var)"
+    elif len(cols) == 2:
+        x_coords = X[cols[0]].values.astype(float)
+        y_coords = X[cols[1]].values.astype(float)
+        feature_x, feature_y = cols[0], cols[1]
+        pca_projection = False
     else:
-        feature_y = "Row index"
-        y_source = pd.Series(range(len(X)), name="Row index")
+        x_coords = X[cols[0]].values.astype(float)
+        y_coords = np.arange(len(X), dtype=float)
+        feature_x, feature_y = cols[0], "Row index"
+        pca_projection = False
 
     idx = sample_indices(len(X))
 
@@ -33,6 +61,7 @@ def run_clustering(df: pd.DataFrame) -> ClusteringResult:
         n_clusters=n_clusters,
         feature_x=feature_x,
         feature_y=feature_y,
-        x_values=X[feature_x].iloc[idx].tolist(),
-        y_values=y_source.iloc[idx].tolist(),
+        x_values=x_coords[idx].tolist(),
+        y_values=y_coords[idx].tolist(),
+        pca_projection=pca_projection,
     )
