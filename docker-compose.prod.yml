@@ -1,0 +1,34 @@
+services:
+  backend:
+    image: ghcr.io/nixtou/datalens-backend:latest
+    env_file: .env
+    restart: unless-stopped
+    networks: [internal]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G      # LangGraph + scikit-learn are memory-hungry
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  frontend:
+    image: ghcr.io/nixtou/datalens-frontend:latest
+    restart: unless-stopped
+    networks:
+      internal:
+      gateway_net:
+        aliases: [datalens-frontend]   # stable DNS name used in gateway nginx.conf
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          memory: 32M
+
+networks:
+  internal:
+  gateway_net:
+    external: true   # created by hetzner-vps-portfolio-infra; must exist before up
