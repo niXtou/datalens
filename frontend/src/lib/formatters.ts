@@ -12,3 +12,14 @@ export function formatPercent(value: number): string {
 export function formatScore(value: number): string {
   return value.toFixed(4)
 }
+
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\*\*(.*?)\*\*/gs, '$1')
+    .replace(/\*(.*?)\*/gs, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/gs, '')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}

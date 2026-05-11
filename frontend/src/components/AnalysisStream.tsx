@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader } from './ui/card'
 import { CheckCircle, Loader } from 'lucide-react'
 
+// Delay before transitioning to the results view after the stream completes,
+// giving the results endpoint time to persist before ResultsDashboard fetches it.
+const RESULTS_TRANSITION_DELAY_MS = 2500
+
 function parseSseChunk(raw: string) {
   return raw
     .split('\n')
@@ -19,16 +23,23 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
   const [isDone, setIsDone] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
-  // Keep a stable ref so the stream closure always calls the latest onDone
-  // without re-triggering the effect when the parent re-renders.
+  // Stable ref so the stream closure always calls the latest onDone
+  // without including it in the effect deps (which would restart the stream).
   const onDoneRef = useRef(onDone)
   useEffect(() => { onDoneRef.current = onDone }, [onDone])
 
   useEffect(() => {
+    // AbortController lets us cancel the fetch on cleanup.
+    // React StrictMode in dev mounts → unmounts → remounts effects; without
+    // this the first request would keep running alongside the second, causing
+    // duplicate stream messages and two concurrent agent runs on the server.
+    const controller = new AbortController()
+
     async function stream() {
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/analyse/${fileId}`, {
           method: 'POST',
+          signal: controller.signal,
         })
         if (!response.ok) {
           throw new Error(`Server error: ${response.status} ${response.statusText}`)
@@ -37,24 +48,30 @@ export default function AnalysisStream({ fileId, onDone }: Props) {
           throw new Error('Response body is empty')
         }
         const reader  = response.body.getReader()
-        const decoder = new TextDecoder()
+        // stream: true keeps the decoder buffer open across calls so multi-byte
+        // UTF-8 characters that span chunk boundaries are decoded correctly.
+        const decoder = new TextDecoder('utf-8', { ignoreBOM: true })
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          for (const event of parseSseChunk(decoder.decode(value))) {
-            if (event.type === 'step') setLog(prev => [...prev, event.data])
+          for (const event of parseSseChunk(decoder.decode(value, { stream: true }))) {
+            if (event.type === 'step')  setLog(prev => [...prev, event.data])
+            else if (event.type === 'error') setError(`Agent error: ${event.data}`)
             else if (event.type === 'done') {
               setIsDone(true)
-              setTimeout(() => onDoneRef.current(), 1200)
+              setTimeout(() => onDoneRef.current(), RESULTS_TRANSITION_DELAY_MS)
             }
           }
         }
       } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return
         setError(e instanceof Error ? e.message : 'Stream error')
       }
     }
     stream()
+
+    return () => controller.abort()
   }, [fileId])
 
   return (

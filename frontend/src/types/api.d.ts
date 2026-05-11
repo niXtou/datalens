@@ -104,6 +104,16 @@ export interface components {
             cluster_labels: number[];
             /** Silhouette Score */
             silhouette_score: number;
+            /** N Clusters */
+            n_clusters: number;
+            /** Feature X */
+            feature_x: string;
+            /** Feature Y */
+            feature_y: string;
+            /** X Values */
+            x_values: number[];
+            /** Y Values */
+            y_values: number[];
         };
         /** ColumnSchema */
         ColumnSchema: {
@@ -130,8 +140,16 @@ export interface components {
             type: "regression";
             /** Coefficients */
             coefficients: number[];
+            /** Feature Names */
+            feature_names: string[];
+            /** Target Name */
+            target_name: string;
             /** R2 Score */
             r2_score: number;
+            /** Actuals */
+            actuals: number[];
+            /** Predicted */
+            predicted: number[];
         };
         /** ResultsResponse */
         ResultsResponse: {

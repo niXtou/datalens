@@ -15,43 +15,50 @@ router = APIRouter()
 
 
 async def event_stream(csv_path: str, file_id: str):
-    # asyncio.Queue bridges the agent thread and this async generator.
-    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    # Queue carries step strings, an Exception on agent failure, or None as sentinel.
+    queue: asyncio.Queue[str | Exception | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
     def run_agent():
-        initial_state = {
-            "csv_path": csv_path,
-            "column_types": {},
-            "analyses_requested": [],
-            "results": {},
-            "stream_log": [],
-        }
-        final_results = {}
-        final_summary = ""
-        for chunk in agent.stream(initial_state):
-            for node_output in chunk.values():
-                for msg in node_output.get("stream_log", []):
-                    # call_soon_threadsafe schedules queue.put_nowait safely from a thread.
-                    loop.call_soon_threadsafe(queue.put_nowait, msg)
-                if "results" in node_output:
-                    final_results = node_output["results"]
-                if "summary" in node_output:
-                    final_summary = node_output["summary"]
-        results_store[file_id] = {"results": final_results, "summary": final_summary}
         try:
-            os.unlink(csv_path)
-        except OSError:
-            pass
-        loop.call_soon_threadsafe(queue.put_nowait, None)  # None = sentinel
+            initial_state = {
+                "csv_path": csv_path,
+                "column_types": {},
+                "analyses_requested": [],
+                "results": {},
+                "stream_log": [],
+            }
+            final_results = {}
+            final_summary = ""
+            for chunk in agent.stream(initial_state):
+                for node_output in chunk.values():
+                    for msg in node_output.get("stream_log", []):
+                        loop.call_soon_threadsafe(queue.put_nowait, msg)
+                    if "results" in node_output:
+                        final_results = node_output["results"]
+                    if "summary" in node_output:
+                        final_summary = node_output["summary"]
+            results_store[file_id] = {"results": final_results, "summary": final_summary}
+            try:
+                os.unlink(csv_path)
+            except OSError:
+                pass
+            loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel: success
+        except Exception as exc:
+            # Forward the exception through the queue so the generator can yield an
+            # error event to the client instead of hanging on queue.get() forever.
+            loop.call_soon_threadsafe(queue.put_nowait, exc)
 
-    # create_task schedules the coroutine without blocking the generator.
-    asyncio.create_task(asyncio.to_thread(run_agent))
+    # Hold a strong reference so the task is not garbage-collected mid-execution.
+    _task = asyncio.create_task(asyncio.to_thread(run_agent))  # noqa: F841
 
     while True:
         msg = await queue.get()
         if msg is None:
             break
+        if isinstance(msg, Exception):
+            yield f"data: {json.dumps({'type': 'error', 'data': str(msg)})}\n\n"
+            return
         yield f"data: {json.dumps({'type': 'step', 'data': msg})}\n\n"
 
     yield f"data: {json.dumps({'type': 'done'})}\n\n"

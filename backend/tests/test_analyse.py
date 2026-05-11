@@ -1,8 +1,7 @@
 import json
 import uuid
 import pandas as pd
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from datalens_ai.agent.graph import AnalysisPlan
 from datalens_ai.api.upload import file_store
 from datalens_ai.api.analyse import results_store
@@ -55,7 +54,12 @@ def test_get_results_returns_stored_data(client):
         "results": {
             "run_clustering": ClusteringResult(
                 cluster_labels=[0, 1, 2],
-                silhouette_score=0.75
+                silhouette_score=0.75,
+                n_clusters=3,
+                feature_x="x",
+                feature_y="y",
+                x_values=[1.0, 2.0, 3.0],
+                y_values=[1.0, 2.0, 3.0],
             )
         },
         "summary": "Test summary."

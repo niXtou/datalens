@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { columnBadgeVariant, formatPercent, formatScore } from './formatters'
+import { columnBadgeVariant, formatPercent, formatScore, stripMarkdown } from './formatters'
 
 describe('columnBadgeVariant', () => {
   it('returns numeric for numeric columns', () => {
@@ -41,5 +41,29 @@ describe('formatScore', () => {
   })
   it('handles perfect score', () => {
     expect(formatScore(1.0)).toBe('1.0000')
+  })
+})
+
+describe('stripMarkdown', () => {
+  it('strips bold markers', () => {
+    expect(stripMarkdown('**hello world**')).toBe('hello world')
+  })
+  it('strips italic markers', () => {
+    expect(stripMarkdown('*hello world*')).toBe('hello world')
+  })
+  it('strips headings', () => {
+    expect(stripMarkdown('## Summary')).toBe('Summary')
+  })
+  it('strips inline code', () => {
+    expect(stripMarkdown('use `run_clustering`')).toBe('use')
+  })
+  it('leaves plain prose unchanged', () => {
+    expect(stripMarkdown('The data has two groups.')).toBe('The data has two groups.')
+  })
+  it('handles mixed markdown', () => {
+    expect(stripMarkdown('**Finding:** *two* clusters')).toBe('Finding: two clusters')
+  })
+  it('does not leave double spaces when stripping inline code mid-sentence', () => {
+    expect(stripMarkdown('hello `code` world')).toBe('hello world')
   })
 })

@@ -3,9 +3,10 @@ import type { components } from '../types/api'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Card, CardContent, CardHeader } from './ui/card'
 import { Badge } from './ui/badge'
+import { stripMarkdown } from '../lib/formatters'
 import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
-  LineChart, Line, Legend,
+  BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts'
 
 type ResultsResponse  = components['schemas']['ResultsResponse']
@@ -13,7 +14,12 @@ type ClusteringResult = components['schemas']['ClusteringResult']
 type RegressionResult = components['schemas']['RegressionResult']
 type AnomalyResult    = components['schemas']['AnomalyResult']
 
-const WARM_COLORS = ['#C96442', '#D4845F', '#8B6E5A', '#A0522D', '#CD853F', '#DEB887']
+const CLUSTER_COLORS = ['#C96442', '#4A7FA5', '#6B8E5E', '#8B6E9A', '#C4943A', '#5E8A8A']
+
+// Format a number for axis ticks and tooltips: drop trailing zeros, cap at 2 decimal places.
+function fmtTick(v: number): string {
+  return parseFloat(v.toFixed(2)).toString()
+}
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -29,37 +35,88 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   )
 }
 
+const tooltipStyle = {
+  background: 'var(--color-surface)',
+  border: '1px solid var(--color-border)',
+  borderRadius: '8px',
+  fontSize: '13px',
+}
+
+const axisTickStyle = { fontSize: 12, fill: 'var(--color-subtle)' }
+
 function ClusteringPanel({ result }: { result: ClusteringResult }) {
-  const data = result.cluster_labels.map((label, i) => ({ i, label }))
+  const points = result.x_values.map((x, i) => ({
+    x,
+    y: result.y_values[i],
+    cluster: result.cluster_labels[i],
+  }))
+
+  const uniqueClusters = Array.from(new Set(result.cluster_labels)).sort((a, b) => a - b)
+
+  // Explicit domain with padding prevents Recharts from deriving bounds only
+  // from the first Scatter series, which caused other clusters to plot at zero.
+  const xMin = Math.min(...result.x_values)
+  const xMax = Math.max(...result.x_values)
+  const yMin = Math.min(...result.y_values)
+  const yMax = Math.max(...result.y_values)
+  const xPad = (xMax - xMin) * 0.08 || 1
+  const yPad = (yMax - yMin) * 0.08 || 1
+
   return (
     <div className="flex flex-col gap-5">
-      <MetricCard label="Silhouette score" value={result.silhouette_score.toFixed(3)} />
+      <div className="grid grid-cols-2 gap-3">
+        <MetricCard label="Clusters found" value={String(result.n_clusters)} />
+        <MetricCard label="Silhouette score" value={result.silhouette_score.toFixed(3)} />
+      </div>
+
+      <div className="flex gap-4 flex-wrap">
+        {uniqueClusters.map((c, i) => (
+          <div key={c} className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full" style={{ background: CLUSTER_COLORS[i % CLUSTER_COLORS.length] }} />
+            <span style={{ fontSize: '0.78rem', color: 'var(--color-muted)' }}>Cluster {c}</span>
+          </div>
+        ))}
+      </div>
+
       <div>
         <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
-          Data points coloured by cluster assignment
+          Axes show the first two numeric features. Each colour is one group.
         </p>
-        <ResponsiveContainer width="100%" height={280}>
-          <ScatterChart>
+        <ResponsiveContainer width="100%" height={300}>
+          <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
-            <XAxis dataKey="i" name="Index" tick={{ fontSize: 12, fill: 'var(--color-subtle)' }} />
-            <YAxis dataKey="label" name="Cluster" tick={{ fontSize: 12, fill: 'var(--color-subtle)' }} />
-            <Tooltip
-              contentStyle={{
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '8px',
-                fontSize: '13px',
-              }}
+            <XAxis
+              dataKey="x"
+              type="number"
+              name={result.feature_x}
+              domain={[xMin - xPad, xMax + xPad]}
+              tickCount={5}
+              tickFormatter={fmtTick}
+              label={{ value: result.feature_x, position: 'insideBottom', offset: -14, fill: 'var(--color-muted)', fontSize: 12 }}
+              tick={axisTickStyle}
             />
-            {[0, 1, 2].map(cluster => (
-              <Scatter
-                key={cluster}
-                name={`Cluster ${cluster}`}
-                data={data.filter(d => d.label === cluster)}
-                fill={WARM_COLORS[cluster]}
-                opacity={0.8}
-              />
-            ))}
+            <YAxis
+              dataKey="y"
+              type="number"
+              name={result.feature_y}
+              domain={[yMin - yPad, yMax + yPad]}
+              tickCount={5}
+              tickFormatter={fmtTick}
+              label={{ value: result.feature_y, angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
+              tick={axisTickStyle}
+            />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              cursor={{ strokeDasharray: '3 3' }}
+              formatter={(v, name) => [typeof v === 'number' ? fmtTick(v) : v, name]}
+            />
+            {/* Single Scatter + Cell avoids the multi-series domain calculation
+                issue in Recharts where only the first series drives axis bounds. */}
+            <Scatter data={points}>
+              {points.map((p, i) => (
+                <Cell key={i} fill={CLUSTER_COLORS[p.cluster % CLUSTER_COLORS.length]} opacity={0.75} />
+              ))}
+            </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
       </div>
@@ -68,39 +125,94 @@ function ClusteringPanel({ result }: { result: ClusteringResult }) {
 }
 
 function RegressionPanel({ result }: { result: RegressionResult }) {
-  const data = result.coefficients.map((coef, i) => ({ feature: `f${i}`, coefficient: +coef.toFixed(4) }))
+  const coefData = result.coefficients.map((coef, i) => ({
+    name: result.feature_names[i] ?? `f${i}`,
+    coefficient: +coef.toFixed(4),
+  }))
+
+  const avpData = result.actuals.map((actual, i) => ({
+    actual,
+    predicted: result.predicted[i],
+  }))
+
+  const allVals = [...result.actuals, ...result.predicted]
+  const minVal = Math.min(...allVals)
+  const maxVal = Math.max(...allVals)
+
   return (
     <div className="flex flex-col gap-5">
       <MetricCard label="R² score" value={result.r2_score.toFixed(4)} />
+
       <div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
-          Feature coefficients from linear regression
+        <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '4px' }}>
+          Actual vs. predicted — <em style={{ fontStyle: 'normal', color: 'var(--color-subtle)' }}>target: {result.target_name}</em>
+        </p>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginBottom: '12px' }}>
+          Points on the dashed line = perfect prediction. Tighter cluster = better model.
         </p>
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={data}>
+          <ScatterChart margin={{ top: 8, right: 16, bottom: 24, left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
-            <XAxis dataKey="feature" tick={{ fontSize: 12, fill: 'var(--color-subtle)' }} />
-            <YAxis tick={{ fontSize: 12, fill: 'var(--color-subtle)' }} />
+            <XAxis
+              dataKey="actual"
+              type="number"
+              name="Actual"
+              domain={[minVal, maxVal]}
+              tickCount={5}
+              tickFormatter={fmtTick}
+              label={{ value: 'Actual', position: 'insideBottom', offset: -12, fill: 'var(--color-muted)', fontSize: 12 }}
+              tick={axisTickStyle}
+            />
+            <YAxis
+              dataKey="predicted"
+              type="number"
+              name="Predicted"
+              domain={[minVal, maxVal]}
+              tickCount={5}
+              tickFormatter={fmtTick}
+              label={{ value: 'Predicted', angle: -90, position: 'insideLeft', fill: 'var(--color-muted)', fontSize: 12 }}
+              tick={axisTickStyle}
+            />
             <Tooltip
-              contentStyle={{
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '8px',
-                fontSize: '13px',
-              }}
+              contentStyle={tooltipStyle}
+              cursor={{ strokeDasharray: '3 3' }}
+              formatter={(v, name) => [typeof v === 'number' ? fmtTick(v) : v, name]}
             />
-            <Legend wrapperStyle={{ fontSize: '12px' }} />
-            <Line
-              type="monotone"
-              dataKey="coefficient"
-              stroke="var(--color-accent)"
-              strokeWidth={2}
-              dot={{ fill: 'var(--color-accent)', r: 3 }}
-              activeDot={{ r: 5 }}
+            <ReferenceLine
+              segment={[{ x: minVal, y: minVal }, { x: maxVal, y: maxVal }]}
+              stroke="var(--color-border)"
+              strokeDasharray="5 5"
+              strokeWidth={1.5}
             />
-          </LineChart>
+            <Scatter data={avpData} fill={CLUSTER_COLORS[0]} opacity={0.65} />
+          </ScatterChart>
         </ResponsiveContainer>
       </div>
+
+      {coefData.length > 0 && (
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: '12px' }}>
+            Feature coefficients — how much each input shifts the prediction
+          </p>
+          <ResponsiveContainer width="100%" height={Math.max(180, coefData.length * 40)}>
+            <BarChart data={coefData} layout="vertical" margin={{ top: 4, right: 32, bottom: 4, left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" horizontal={false} />
+              <XAxis type="number" tick={axisTickStyle} />
+              <YAxis type="category" dataKey="name" tick={axisTickStyle} width={80} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="coefficient" radius={[0, 4, 4, 0]}>
+                {coefData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={entry.coefficient >= 0 ? CLUSTER_COLORS[0] : CLUSTER_COLORS[1]}
+                    opacity={0.85}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }
@@ -178,11 +290,11 @@ function SummaryPanel({ summary }: { summary: string }) {
         border: '1px solid var(--color-accent-muted)',
       }}
     >
-      <p style={{ fontSize: '0.75rem', color: 'var(--color-accent)', fontWeight: 500, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <p style={{ fontSize: '0.75rem', color: 'var(--color-accent)', fontWeight: 500, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Agent summary
       </p>
-      <p style={{ fontSize: '0.95rem', color: 'var(--color-text)', lineHeight: '1.7', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-        {summary}
+      <p style={{ fontSize: '0.95rem', color: 'var(--color-text)', lineHeight: '1.8' }}>
+        {stripMarkdown(summary)}
       </p>
     </div>
   )
@@ -200,7 +312,7 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
   }, [fileId])
 
   if (error) return <p style={{ color: '#c0392b', fontSize: '0.875rem' }}>{error}</p>
-  if (!data)  return (
+  if (!data) return (
     <div className="flex items-center gap-2 py-8">
       <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" style={{ animation: 'pulse-dot 1s ease-in-out infinite' }} />
       <span style={{ fontSize: '0.875rem', color: 'var(--color-muted)' }}>Loading results…</span>
@@ -234,7 +346,7 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
           <Card>
             <CardHeader>
               <p style={{ fontWeight: 500, fontSize: '0.95rem' }}>K-Means Clustering</p>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>3 clusters · silhouette score</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>Groups similar rows together based on numeric features</p>
             </CardHeader>
             <CardContent><ClusteringPanel result={clustering} /></CardContent>
           </Card>
@@ -246,7 +358,7 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
           <Card>
             <CardHeader>
               <p style={{ fontWeight: 500, fontSize: '0.95rem' }}>Linear Regression</p>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>Last numeric column as target</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>Predicts <em style={{ fontStyle: 'normal', color: 'var(--color-text)' }}>{regression.target_name}</em> from the other numeric columns</p>
             </CardHeader>
             <CardContent><RegressionPanel result={regression} /></CardContent>
           </Card>
@@ -258,7 +370,7 @@ export default function ResultsDashboard({ fileId }: { fileId: string }) {
           <Card>
             <CardHeader>
               <p style={{ fontWeight: 500, fontSize: '0.95rem' }}>Anomaly Detection</p>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>IsolationForest · flagged rows</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>IsolationForest — rows that look unusual compared to the rest</p>
             </CardHeader>
             <CardContent><AnomalyPanel result={anomaly} /></CardContent>
           </Card>

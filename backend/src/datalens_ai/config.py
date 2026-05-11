@@ -14,3 +14,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Maximum number of data points sent to the frontend per chart series.
+# Keeps payload size and render time reasonable without losing visual fidelity.
+SCATTER_SAMPLE = 300

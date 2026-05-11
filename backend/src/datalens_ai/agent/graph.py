@@ -19,6 +19,12 @@ TOOLS = {
     "run_regression": run_regression,
 }
 
+_TOOL_LABELS = {
+    "run_clustering": "Grouping data points into clusters",
+    "run_regression": "Fitting a regression model",
+    "run_anomaly": "Scanning for anomalies",
+}
+
 
 class AnalysisPlan(BaseModel):
     analyses: list[str]
@@ -32,7 +38,7 @@ def infer_columns_node(state: AgentState) -> dict:
     schemas = infer_columns(df)
     return {
         "column_types": {s.name: s.column_type for s in schemas},
-        "stream_log": ["Inferring column types..."],
+        "stream_log": ["Inspecting data structure..."],
     }
 
 
@@ -53,34 +59,48 @@ def plan_analyses(state: AgentState) -> dict:
     ])
     # Filter out any tool names the LLM hallucinated that are not in TOOLS.
     valid = [a for a in result.analyses if a in TOOLS]
-    return {"analyses_requested": valid, "stream_log": ["Planning analyses..."]}
+    return {"analyses_requested": valid, "stream_log": ["Deciding which analyses to run..."]}
 
 
 def run_tool(state: AgentState) -> dict:
     analyses = list(state["analyses_requested"])
     tool_name = analyses.pop(0)
+    label = _TOOL_LABELS.get(tool_name, f"Running {tool_name}")
     df = pd.read_csv(state["csv_path"])
     result = TOOLS[tool_name](df)
     return {
         "analyses_requested": analyses,
         "results": {**state["results"], tool_name: result},
-        "stream_log": [f"Running {tool_name}..."],
+        "stream_log": [f"{label}..."],
     }
 
 
+# Fields that carry raw data points — excluded from the LLM prompt to avoid
+# wasting tokens on numbers the model can't meaningfully interpret.
+_ARRAY_FIELDS = {"cluster_labels", "x_values", "y_values", "actuals", "predicted"}
+
+
+def _scalar_summary(results: dict) -> str:
+    """Return a JSON string with only scalar fields from each result."""
+    summary = {
+        k: {f: v for f, v in result.model_dump().items() if f not in _ARRAY_FIELDS}
+        for k, result in results.items()
+    }
+    return json.dumps(summary, indent=2)
+
+
 def summarize(state: AgentState) -> dict:
-    results = json.dumps(
-        {k: v.model_dump() for k, v in state["results"].items()},
-        indent=2,
-    )
+    results = _scalar_summary(state["results"])
     response = _llm.invoke([
         SystemMessage(content=(
-            "You are a data analyst. Summarize the following analysis results "
-            "for a non-technical audience. Be concise."
+            "You are a data analyst. Summarize the following analysis results for a "
+            "non-technical audience in 2-3 plain prose sentences. "
+            "Do not use markdown, bullet points, bold text, or headers. "
+            "Write as if explaining findings to someone who has never seen statistics."
         )),
         HumanMessage(content=results),
     ])
-    return {"summary": response.content, "stream_log": ["Summarizing results...", response.content]}
+    return {"summary": response.content, "stream_log": ["Writing summary..."]}
 
 
 def should_continue(state: AgentState) -> str:
