@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { components } from '../types/api'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Card, CardContent, CardHeader } from './ui/card'
-import { Badge } from './ui/badge'
 import { formatNumber, niceRange, stripMarkdown } from '../lib/formatters'
 import { downloadAnomalyCsv } from '../lib/downloads'
 import {
