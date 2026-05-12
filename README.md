@@ -2,7 +2,9 @@
 
 Upload a CSV → LangGraph agent runs ML analyses → React dashboard streams live results.
 
-![CI](https://github.com/niXtou/datalens-ai/actions/workflows/ci.yml/badge.svg)
+**[Live Demo](https://datalens.nstoug.com)** · **[Architecture](#architecture)**
+
+![CI](https://github.com/niXtou/datalens/actions/workflows/ci.yml/badge.svg)
 
 ---
 
@@ -65,8 +67,6 @@ cd frontend && pnpm install && pnpm dev --host 0.0.0.0
 ```
 
 Frontend: `http://localhost:3000` · API: `http://localhost:8000`
-
-> **WSL2 note:** Run services directly rather than via Docker Compose — native Docker Engine in WSL2 mirrored-mode does not bridge ports to Windows reliably.
 
 ---
 

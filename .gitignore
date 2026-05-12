@@ -24,3 +24,9 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# AI development context — local only, not for public repo
+AI_CONTEXT.md
+STAGES.md
+CLAUDE.md
+docs/
