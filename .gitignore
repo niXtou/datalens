@@ -25,8 +25,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
-# AI development context — local only, not for public repo
-AI_CONTEXT.md
-STAGES.md
-CLAUDE.md
-docs/
+# Local working context (Claude Code cache, scratch notes)
+docs/superpowers/
+.claude/
