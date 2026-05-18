@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Check } from 'lucide-react'
 import type { components } from './types/api'
 import UploadForm from './components/UploadForm'
 
@@ -21,38 +22,58 @@ function Stepper({ current }: { current: AppStep }) {
       {STEPS.map((step, i) => {
         const done   = i < currentIdx
         const active = i === currentIdx
-        const future = i > currentIdx
+
+        const nodeStyle: React.CSSProperties = {
+          width: 26,
+          height: 26,
+          fontVariantNumeric: 'tabular-nums',
+          ...(done && {
+            background: 'var(--color-accent-soft)',
+            color: 'var(--color-accent)',
+          }),
+          ...(active && {
+            background: 'var(--color-accent)',
+            color: '#fff',
+            boxShadow: '0 0 0 2px rgba(201, 100, 66, 0.15)',
+          }),
+          ...(!done && !active && {
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border-light)',
+            color: 'var(--color-subtle)',
+          }),
+        }
 
         return (
           <div key={step.id} className="flex items-center">
             <div className="flex flex-col items-center gap-1.5">
               <div
-                className={[
-                  'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300',
-                  done   ? 'bg-[var(--color-accent)] text-white'                                                     : '',
-                  active ? 'bg-[var(--color-accent)] text-white ring-4 ring-[var(--color-accent-soft)]'              : '',
-                  future ? 'bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-subtle)]' : '',
-                ].join(' ')}
+                className="rounded-full flex items-center justify-center text-xs font-medium transition-all duration-300"
+                style={nodeStyle}
               >
-                {done ? '✓' : i + 1}
+                {done ? <Check size={12} strokeWidth={2.5} /> : i + 1}
               </div>
               <span
-                className={[
-                  'text-xs font-medium transition-colors duration-300',
-                  active ? 'text-[var(--color-accent)]' : '',
-                  done   ? 'text-[var(--color-muted)]'  : '',
-                  future ? 'text-[var(--color-subtle)]' : '',
-                ].join(' ')}
+                className="mono-cap"
+                style={{
+                  color: active ? 'var(--color-accent)'
+                       : done   ? 'var(--color-muted)'
+                                : 'var(--color-subtle)',
+                  transition: 'color 300ms',
+                }}
               >
                 {step.label}
               </span>
             </div>
             {i < STEPS.length - 1 && (
               <div
-                className={[
-                  'w-16 h-px mb-5 mx-3 transition-all duration-500',
-                  i < currentIdx ? 'bg-[var(--color-accent-muted)]' : 'bg-[var(--color-border)]',
-                ].join(' ')}
+                className="transition-all duration-500"
+                style={{
+                  width: 80,
+                  height: 1,
+                  marginBottom: 20,
+                  marginInline: 12,
+                  background: i < currentIdx ? 'var(--color-accent-muted)' : 'var(--color-border-light)',
+                }}
               />
             )}
           </div>
@@ -67,7 +88,6 @@ export default function App() {
   const [fileId,  setFileId]  = useState<string | null>(null)
   const [filename, setFilename] = useState<string | null>(null)
   const [columns, setColumns] = useState<ColumnSchema[]>([])
-  const [apiOk,   setApiOk]   = useState<boolean | null>(null)
 
   // Restore last completed analysis from localStorage so a page refresh
   // doesn't send the user back to the upload step.
@@ -86,12 +106,6 @@ export default function App() {
         localStorage.removeItem(SESSION_KEY)
       }
     }
-  }, [])
-
-  useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/health`)
-      .then(() => setApiOk(true))
-      .catch(() => setApiOk(false))
   }, [])
 
   function handleUploaded(id: string, name: string, cols: ColumnSchema[]) {
@@ -122,37 +136,57 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="max-w-3xl mx-auto px-6 py-5 flex items-center justify-between">
-          <div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.65rem' }}>
-              DataLens <em style={{ color: 'var(--color-accent)', fontStyle: 'italic' }}>AI</em>
-            </h1>
-            <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)', marginTop: '2px' }}>
-              Upload a dataset. Watch the agent think. See the results.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div
-              className={[
-                'w-1.5 h-1.5 rounded-full transition-colors',
-                apiOk === null  ? 'bg-[var(--color-subtle)]'  : '',
-                apiOk === true  ? 'bg-[var(--color-success)]' : '',
-                apiOk === false ? 'bg-red-400'                : '',
-              ].join(' ')}
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-subtle)' }}>
-              {apiOk === null ? 'connecting' : apiOk ? 'online' : 'offline'}
-            </span>
-          </div>
-        </div>
-      </header>
+      <header className="border-b bg-[var(--color-surface)]" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="max-w-3xl mx-auto px-6 pt-5 pb-7">
+          <div className="flex items-center justify-between mb-7">
+            <a
+              href="/"
+              className="flex items-baseline gap-3 group"
+              style={{ textDecoration: 'none' }}
+            >
+              <h1
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '1.9rem',
+                  lineHeight: 1.05,
+                  transition: 'color 150ms',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text)')}
+              >
+                DataLens
+              </h1>
+              <span
+                aria-hidden
+                style={{
+                  width: 1,
+                  height: 14,
+                  background: 'var(--color-border)',
+                  display: 'inline-block',
+                }}
+              />
+              <span className="mono-cap" style={{ color: 'var(--color-subtle)' }}>
+                Agentic ML on your CSV
+              </span>
+            </a>
 
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] py-6">
-        <div className="max-w-3xl mx-auto px-6">
+            <nav className="flex items-center" style={{ fontSize: '0.8rem' }}>
+              <a
+                href={`${import.meta.env.VITE_API_URL}/docs`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--color-muted)', transition: 'color 150ms' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+              >
+                API Docs
+              </a>
+            </nav>
+          </div>
+
           <Stepper current={step} />
         </div>
-      </div>
+      </header>
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-6 py-10">
         <UploadForm
@@ -167,11 +201,31 @@ export default function App() {
         />
       </main>
 
-      <footer className="border-t border-[var(--color-border)] py-4">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <p style={{ fontSize: '0.75rem', color: 'var(--color-subtle)' }}>
-            DataLens — LangGraph · FastAPI · React
-          </p>
+      <footer className="border-t mt-8" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="max-w-3xl mx-auto px-6 py-8 flex items-center justify-between mono-cap" style={{ color: 'var(--color-subtle)' }}>
+          <span>
+            Built by{' '}
+            <a
+              href="https://www.nstoug.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--color-muted)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+            >
+              nstoug
+            </a>
+          </span>
+          <a
+            href="https://github.com/niXtou/datalens"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--color-muted)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-muted)')}
+          >
+            Source
+          </a>
         </div>
       </footer>
     </div>

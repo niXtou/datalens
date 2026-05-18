@@ -194,15 +194,62 @@ export default function UploadForm({
   // ── Step: Upload ────────────────────────────────────────────────────────────
   if (step === 'upload') {
     return (
-      <div className="animate-fade-up flex flex-col gap-6">
-        <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', marginBottom: '6px' }}>
-            Upload your dataset
+      <div className="animate-fade-up flex flex-col gap-10">
+        <section>
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '2.5rem',
+              lineHeight: 1.05,
+              maxWidth: '18ch',
+              marginBottom: '14px',
+            }}
+          >
+            Upload a dataset. Watch the agent think.
           </h2>
-          <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-            Choose a CSV file to begin. The agent will infer column types automatically.
+          <p style={{ color: 'var(--color-muted)', fontSize: '1rem', maxWidth: '58ch', lineHeight: 1.55 }}>
+            DataLens runs a small LangGraph agent over your CSV — clustering, regression, and
+            anomaly detection from scikit-learn, streamed back as it works.
           </p>
-        </div>
+        </section>
+
+        {!uploadResult && (
+          <section aria-label="How it works">
+            <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: '24px' }}>
+              {[
+                { n: '01', label: 'Inspect',  body: 'We infer column types from your CSV automatically.' },
+                { n: '02', label: 'Analyse',  body: 'A LangGraph agent runs clustering, regression, and anomaly detection.' },
+                { n: '03', label: 'Report',   body: 'Charts and a plain-prose summary, streamed back live.' },
+              ].map((s, i) => (
+                <div key={s.n} className="relative" style={i > 0 ? { paddingLeft: 12 } : {}}>
+                  {i > 0 && (
+                    <div
+                      aria-hidden
+                      className="hidden sm:block absolute"
+                      style={{ left: -12, top: 4, bottom: 4, width: 1, background: 'var(--color-border-light)' }}
+                    />
+                  )}
+                  <div className="mono-cap" style={{ color: 'var(--color-accent)', marginBottom: 6 }}>
+                    {s.n}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: '1.15rem',
+                      lineHeight: 1.2,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {s.label}
+                  </div>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)', lineHeight: 1.55 }}>
+                    {s.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Drop zone */}
         <div
@@ -348,10 +395,10 @@ export default function UploadForm({
         {/* Header row */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', marginBottom: '6px' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', marginBottom: '6px' }}>
               Analysis results
             </h2>
-            <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>{displayName}</p>
+            <p style={{ color: 'var(--color-muted)', fontSize: '0.95rem' }}>{displayName}</p>
           </div>
           <div className="flex items-center gap-2">
             {resultsData && (

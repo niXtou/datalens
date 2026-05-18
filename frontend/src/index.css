@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -24,6 +24,7 @@
 
   --font-display: 'Instrument Serif', Georgia, serif;
   --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -73,9 +74,48 @@ p { margin: 0; }
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes pulse-halo {
+  0%, 100% { box-shadow: 0 0 0 0   rgba(201, 100, 66, 0.35); }
+  70%      { box-shadow: 0 0 0 6px rgba(201, 100, 66, 0);    }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1;    }
+  50%      { opacity: 0.55; }
+}
 
-.animate-fade-up { animation: fade-up 0.35s ease both; }
-.animate-fade-in { animation: fade-in 0.25s ease both; }
+.animate-fade-up    { animation: fade-up 0.35s ease both; }
+.animate-fade-in    { animation: fade-in 0.25s ease both; }
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+
+/* Editorial monospace eyebrow / label. Color is set by the caller. */
+.mono-cap {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.mono-cap-sm {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-border-light) 0%,
+    var(--color-border)       50%,
+    var(--color-border-light) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
 
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
