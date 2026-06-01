@@ -1,13 +1,28 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import asyncio  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+
 from fastapi import FastAPI, Response  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from datalens_ai.api.upload import router as upload_router  # noqa: E402
 from datalens_ai.api.analyse import router as analyse_router  # noqa: E402
+from datalens_ai.api.cleanup import cleanup_loop  # noqa: E402
 from datalens_ai.config import settings  # noqa: E402
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Background TTL sweep for stale uploads/results (see api/cleanup.py).
+    task = asyncio.create_task(cleanup_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

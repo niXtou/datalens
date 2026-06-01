@@ -13,6 +13,35 @@ def test_analyse_unknown_file(client):
     assert response.status_code == 404
 
 
+def test_analyse_after_filestore_miss_resolves_from_disk(client):
+    """Regression: with multiple uvicorn workers the worker serving /analyse has
+    an empty in-memory file_store, but the upload is on disk keyed by file_id, so
+    the request must resolve from disk instead of returning a 404."""
+    df = pd.DataFrame({
+        "x": [1.0, 2.0, 3.0, 10.0, 11.0, 12.0],
+        "y": [1.0, 2.0, 3.0, 10.0, 11.0, 12.0],
+    })
+    csv_bytes = df.to_csv(index=False).encode()
+    upload = client.post("/upload", files={"file": ("d.csv", csv_bytes, "text/csv")})
+    file_id = upload.json()["file_id"]
+
+    # Simulate the analyse request landing on a worker that never saw the upload.
+    file_store.clear()
+
+    with patch("datalens_ai.agent.graph._llm") as mock_llm:
+        mock_llm.with_structured_output.return_value.invoke.return_value = AnalysisPlan(
+            analyses=["run_clustering"]
+        )
+        mock_llm.invoke.return_value.content = "Summary."
+        with client.stream(
+            "POST",
+            f"/analyse/{file_id}",
+            json={"analyses": ["run_clustering"]},
+        ) as response:
+            assert response.status_code == 200  # not 404
+            list(response.iter_lines())
+
+
 def test_sse_event_sequence(client, tmp_path):
     df = pd.DataFrame({
         "x": [1.0, 2.0, 3.0, 10.0, 11.0, 12.0],

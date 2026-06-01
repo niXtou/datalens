@@ -46,12 +46,14 @@ export default function AnalysisStream({ fileId, analyses, targetColumn, force, 
   useEffect(() => { onDoneRef.current = onDone }, [onDone])
 
   useEffect(() => {
-    if (isDone) return
+    // Stop the clock on completion OR error — otherwise a failed request (e.g. a
+    // 404) leaves the interval running and the timer climbs forever.
+    if (isDone || error) return
     const id = setInterval(() => {
       setElapsed(performance.now() - startTimeRef.current)
     }, 100)
     return () => clearInterval(id)
-  }, [isDone])
+  }, [isDone, error])
 
   useEffect(() => {
     // AbortController prevents duplicate agent runs on cleanup (React StrictMode double-mount).
@@ -136,7 +138,7 @@ export default function AnalysisStream({ fileId, analyses, targetColumn, force, 
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {isDone ? 'Completed' : 'Running'} · {formatElapsed(elapsedMs)}
+          {error ? 'Failed' : isDone ? 'Completed' : 'Running'} · {formatElapsed(elapsedMs)}
         </p>
       </div>
 

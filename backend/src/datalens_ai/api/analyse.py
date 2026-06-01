@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from datalens_ai.agent.graph import agent
-from datalens_ai.api.upload import file_store
+from datalens_ai.api.upload import resolve_csv_path
 from datalens_ai.models.results import ResultsResponse
 
 
@@ -103,7 +103,7 @@ async def analyse(file_id: str, request: AnalyseRequest = AnalyseRequest()):
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         return StreamingResponse(_replay(), media_type="text/event-stream")
 
-    csv_path = file_store.get(file_id)
+    csv_path = resolve_csv_path(file_id)
     if csv_path is None:
         raise HTTPException(status_code=404, detail="File not found")
     return StreamingResponse(event_stream(csv_path, file_id, request), media_type="text/event-stream")
