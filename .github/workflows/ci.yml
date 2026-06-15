@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Collapse rapid pushes to the same ref into one run: a newer run cancels the
+# in-progress one, so only the latest commit's build + deploy completes
+# (avoids racing `docker compose up` on the VPS).
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
