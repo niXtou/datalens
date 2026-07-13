@@ -9,7 +9,7 @@ description = "Upload CSV, run ML analyses with LangGraph, stream results to Rea
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.139.0",
-    "uvicorn[standard]>=0.50.2",
+    "uvicorn[standard]>=0.51.0",
     "pydantic>=2.13.4",
     "pandas>=3.0.4",
     "scikit-learn>=1.9.0",
