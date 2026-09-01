@@ -71,7 +71,8 @@ backend/src/datalens_ai/
 ├── main.py              # FastAPI app + lifespan
 ├── api/                 # Route handlers
 ├── agent/               # LangGraph graph + node functions
-├── tools/               # scikit-learn wrappers (KMeans, LinearRegression, IsolationForest)
+├── tools/               # scikit-learn wrappers: clustering (KMeans), regression (LinearRegression),
+│                        #   classification (RandomForest), anomaly (IsolationForest), correlation (Pearson)
 ├── models/              # Pydantic v2 — single source of truth for TS codegen
 └── config.py            # Pydantic Settings (env vars)
 
@@ -87,7 +88,11 @@ Key files to read first: `backend/src/datalens_ai/agent/graph.py` (graph assembl
 
 - **Streaming**: SSE (`text/event-stream`) via FastAPI, not WebSockets.
 - **LLM**: All calls go through OpenRouter via `langchain-openrouter`. Don't import provider SDKs directly.
-- **LangGraph state**: `AgentState` (TypedDict) with `csv_path`, `column_types`, `analyses_requested`, `results`, `stream_log`. Each node is an async function returning a partial state dict.
+- **LangGraph state**: `AgentState` (TypedDict) with `csv_path`, `column_types`, `analyses_requested`, `results`, `stream_log`, plus optional `analyses_override`, `target_column` (regression) and `classification_target`. Each node is a function returning a partial state dict.
+- **Tools**: `TOOLS` in `agent/graph.py` maps `run_clustering`, `run_regression`, `run_classification`, `run_anomaly`, `run_correlation` to `tools/*.py`. Each takes a DataFrame and returns a Pydantic result in the `AnalysisResult` union; raise `ValueError` for "can't run on this data" — `run_tool` turns it into a skipped step, never a crash. Add new array-valued result fields to `_ARRAY_FIELDS` so they stay out of the summary prompt.
+- **Planner guardrails**: the LLM plan is filtered in code (`_filter_by_prerequisites`) — classification needs a `class_label` column, correlation needs ≥2 numeric columns. The explicit `analyses` override from the UI bypasses the planner entirely.
+- **Summary fallback**: if the LLM call in `summarize` fails, the node logs a warning and returns `summary=""` with a "Summary unavailable" stream step. Tool results are still persisted and shown; the frontend simply hides the Summary tab.
+- **Settings**: `OPENROUTER_API_KEY` (required), `LLM_MODEL` (OpenRouter model id, default `google/gemini-3.1-flash-lite-preview`), `MAX_UPLOAD_BYTES`, `FILE_RETENTION_HOURS`, `CORS_ORIGINS`, LangSmith vars. See `config.py`.
 - **No secrets in code**: env vars only, via Pydantic Settings.
 - **Library docs**: use `context7` MCP for current LangGraph / FastAPI / Pydantic / OpenRouter docs — training data may be stale.
 
