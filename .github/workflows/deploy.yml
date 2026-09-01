@@ -123,18 +123,16 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
           REPO_OWNER: ${{ env.REPO_OWNER }}
         with:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GITHUB_ACTOR,GHCR_PAT,REPO_OWNER
+          envs: REPO_OWNER
           script: |
             set -e
             cd ~/datalens
-            echo "$GHCR_PAT" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin || echo "ghcr.io login failed — continuing (images are public)"
+            # Images are public on ghcr.io — no registry login needed.
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
