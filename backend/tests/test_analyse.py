@@ -118,7 +118,10 @@ def test_upload_csv(client, tmp_path):
     assert response.status_code == 200
     data = response.json()
     assert "file_id" in data
+    assert data["row_count"] == 2
     assert len(data["columns"]) == 2
+    assert data["columns"][0]["profile"]["mean"] == 27.5
+    assert data["columns"][1]["profile"]["top_values"][0] == {"value": "Alice", "count": 1}
 
 
 def test_upload_rejects_single_row_csv(client):
@@ -246,3 +249,36 @@ def test_analyse_with_target_column(client, tmp_path):
     assert reg is not None
     assert reg.target_name == "a"
 
+
+
+def test_analyse_with_classification_target(client, tmp_path):
+    n = 40
+    df = pd.DataFrame({
+        "x": [float(i) for i in range(n)],
+        "y": [float(i % 5) for i in range(n)],
+        "group": ["a" if i < n // 2 else "b" for i in range(n)],
+    })
+    csv_file = tmp_path / "test.csv"
+    df.to_csv(csv_file, index=False)
+
+    file_id = str(uuid.uuid4())
+    file_store[file_id] = str(csv_file)
+
+    with patch("datalens_ai.agent.graph._llm") as mock_llm:
+        mock_llm.invoke.return_value.content = "Summary."
+        with client.stream(
+            "POST",
+            f"/analyse/{file_id}",
+            json={"analyses": ["run_classification"], "classification_target": "group"},
+        ) as response:
+            assert response.status_code == 200
+            list(response.iter_lines())  # consume stream
+
+    results = results_store.get(file_id)
+    assert results is not None
+    clf = results["results"].get("run_classification")
+    assert clf is not None
+    assert clf.target_name == "group"
+
+    fetched = client.get(f"/results/{file_id}").json()
+    assert fetched["results"]["run_classification"]["type"] == "classification"

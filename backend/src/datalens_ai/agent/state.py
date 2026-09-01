@@ -20,3 +20,5 @@ class AgentState(TypedDict):
     analyses_override: NotRequired[bool]
     # User-chosen regression target column; None = use last-column heuristic.
     target_column: NotRequired[str | None]
+    # User-chosen classification target column; None = auto-pick a class_label column.
+    classification_target: NotRequired[str | None]

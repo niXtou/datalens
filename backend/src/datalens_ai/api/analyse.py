@@ -15,6 +15,7 @@ from datalens_ai.models.results import ResultsResponse
 class AnalyseRequest(BaseModel):
     analyses: list[str] | None = None
     target_column: str | None = None
+    classification_target: str | None = None
     force: bool = False  # re-run even when results already exist
 
 results_store: dict[str, dict] = {}
@@ -53,6 +54,7 @@ async def event_stream(csv_path: str, file_id: str, request: AnalyseRequest):
                 "analyses_requested": request.analyses if request.analyses is not None else [],
                 "analyses_override": request.analyses is not None,
                 "target_column": request.target_column,
+                "classification_target": request.classification_target,
                 "results": {},
                 "stream_log": [],
                 "summary": "",

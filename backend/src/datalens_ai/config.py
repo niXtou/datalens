@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     openrouter_api_key: str
+    # OpenRouter model id used for both planning and summarising.
+    llm_model: str = "google/gemini-3.1-flash-lite-preview"
     langsmith_api_key: str = ""
     langsmith_tracing: bool = False
     langsmith_project: str = "datalens"
