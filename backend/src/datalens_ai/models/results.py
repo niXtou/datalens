@@ -21,7 +21,10 @@ class RegressionResult(BaseModel):
     feature_names: list[str]
     excluded_columns: list[str]
     target_name: str
-    r2_score: float
+    r2_score: float                # in-sample R² — optimistic, kept for continuity
+    cv_r2_score: float | None      # mean 5-fold cross-validated R²; None when too few rows
+    rmse: float                    # in-sample root mean squared error, in target units
+    n_samples: int
     actuals: list[float]
     predicted: list[float]
 
@@ -34,8 +37,38 @@ class AnomalyResult(BaseModel):
     feature_stats: dict[str, dict[str, float]]  # per-column {mean, std} for z-score highlighting
 
 
+class ClassificationResult(BaseModel):
+    type: Literal["classification"] = "classification"
+    target_name: str
+    class_labels: list[str]
+    n_classes: int
+    n_samples: int
+    cv_folds: int
+    cv_accuracy: float             # mean out-of-fold accuracy
+    cv_accuracy_std: float         # std of per-fold accuracy
+    baseline_accuracy: float       # majority-class share — what "always guess the biggest class" scores
+    macro_f1: float
+    confusion_matrix: list[list[int]]  # rows = actual class, columns = predicted class
+    feature_names: list[str]
+    feature_importances: list[float]
+
+
+class CorrelationPair(BaseModel):
+    feature_a: str
+    feature_b: str
+    r: float
+
+
+class CorrelationResult(BaseModel):
+    type: Literal["correlation"] = "correlation"
+    columns: list[str]
+    matrix: list[list[float]]      # Pearson r, same order as `columns` on both axes
+    top_pairs: list[CorrelationPair]
+    truncated: bool = False        # True when more numeric columns existed than were analysed
+
+
 AnalysisResult = Annotated[
-    ClusteringResult | RegressionResult | AnomalyResult,
+    ClusteringResult | RegressionResult | AnomalyResult | ClassificationResult | CorrelationResult,
     Field(discriminator="type"),
 ]
 

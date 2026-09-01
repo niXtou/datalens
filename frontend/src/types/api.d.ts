@@ -68,7 +68,8 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /** Health Check Head */
+        head: operations["health_check_head_health_head"];
         patch?: never;
         trace?: never;
     };
@@ -76,6 +77,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalyseRequest */
+        AnalyseRequest: {
+            /** Analyses */
+            analyses?: string[] | null;
+            /** Target Column */
+            target_column?: string | null;
+            /** Classification Target */
+            classification_target?: string | null;
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
         /** AnomalyResult */
         AnomalyResult: {
             /**
@@ -102,6 +117,38 @@ export interface components {
         Body_upload_file_upload_post: {
             /** File */
             file: string;
+        };
+        /** ClassificationResult */
+        ClassificationResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "classification";
+            /** Target Name */
+            target_name: string;
+            /** Class Labels */
+            class_labels: string[];
+            /** N Classes */
+            n_classes: number;
+            /** N Samples */
+            n_samples: number;
+            /** Cv Folds */
+            cv_folds: number;
+            /** Cv Accuracy */
+            cv_accuracy: number;
+            /** Cv Accuracy Std */
+            cv_accuracy_std: number;
+            /** Baseline Accuracy */
+            baseline_accuracy: number;
+            /** Macro F1 */
+            macro_f1: number;
+            /** Confusion Matrix */
+            confusion_matrix: number[][];
+            /** Feature Names */
+            feature_names: string[];
+            /** Feature Importances */
+            feature_importances: number[];
         };
         /** ClusteringResult */
         ClusteringResult: {
@@ -130,17 +177,69 @@ export interface components {
              */
             pca_projection: boolean;
         };
+        /** ColumnProfile */
+        ColumnProfile: {
+            /** Missing Count */
+            missing_count: number;
+            /** Missing Pct */
+            missing_pct: number;
+            /** Unique Count */
+            unique_count: number;
+            /** Mean */
+            mean?: number | null;
+            /** Std */
+            std?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Max */
+            max?: number | null;
+            /** Top Values */
+            top_values?: components["schemas"]["TopValue"][] | null;
+            /** Min Date */
+            min_date?: string | null;
+            /** Max Date */
+            max_date?: string | null;
+        };
         /** ColumnSchema */
         ColumnSchema: {
             /** Name */
             name: string;
             column_type: components["schemas"]["ColumnType"];
+            profile: components["schemas"]["ColumnProfile"];
         };
         /**
          * ColumnType
          * @enum {string}
          */
         ColumnType: "numeric" | "categorical" | "datetime" | "class_label";
+        /** CorrelationPair */
+        CorrelationPair: {
+            /** Feature A */
+            feature_a: string;
+            /** Feature B */
+            feature_b: string;
+            /** R */
+            r: number;
+        };
+        /** CorrelationResult */
+        CorrelationResult: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "correlation";
+            /** Columns */
+            columns: string[];
+            /** Matrix */
+            matrix: number[][];
+            /** Top Pairs */
+            top_pairs: components["schemas"]["CorrelationPair"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -165,6 +264,12 @@ export interface components {
             target_name: string;
             /** R2 Score */
             r2_score: number;
+            /** Cv R2 Score */
+            cv_r2_score: number | null;
+            /** Rmse */
+            rmse: number;
+            /** N Samples */
+            n_samples: number;
             /** Actuals */
             actuals: number[];
             /** Predicted */
@@ -174,15 +279,24 @@ export interface components {
         ResultsResponse: {
             /** Results */
             results: {
-                [key: string]: components["schemas"]["ClusteringResult"] | components["schemas"]["RegressionResult"] | components["schemas"]["AnomalyResult"];
+                [key: string]: components["schemas"]["ClusteringResult"] | components["schemas"]["RegressionResult"] | components["schemas"]["AnomalyResult"] | components["schemas"]["ClassificationResult"] | components["schemas"]["CorrelationResult"];
             };
             /** Summary */
             summary: string;
+        };
+        /** TopValue */
+        TopValue: {
+            /** Value */
+            value: string;
+            /** Count */
+            count: number;
         };
         /** UploadResponse */
         UploadResponse: {
             /** File Id */
             file_id: string;
+            /** Row Count */
+            row_count: number;
             /** Columns */
             columns: components["schemas"]["ColumnSchema"][];
         };
@@ -250,7 +364,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalyseRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -304,6 +422,26 @@ export interface operations {
         };
     };
     health_check_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    health_check_head_health_head: {
         parameters: {
             query?: never;
             header?: never;

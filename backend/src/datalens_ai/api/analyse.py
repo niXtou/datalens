@@ -1,11 +1,12 @@
 import asyncio
 import json
+import logging
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from datalens_ai.agent.graph import agent
 from datalens_ai.api.upload import resolve_csv_path
@@ -15,6 +16,7 @@ from datalens_ai.models.results import ResultsResponse
 class AnalyseRequest(BaseModel):
     analyses: list[str] | None = None
     target_column: str | None = None
+    classification_target: str | None = None
     force: bool = False  # re-run even when results already exist
 
 results_store: dict[str, dict] = {}
@@ -24,6 +26,7 @@ _RESULTS_DIR = Path(tempfile.gettempdir()) / "datalens_ai_results"
 _RESULTS_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _persist(file_id: str, data: dict) -> None:
@@ -38,7 +41,15 @@ def _load_from_disk(file_id: str) -> ResultsResponse | None:
     path = _RESULTS_DIR / f"{file_id}.json"
     if not path.exists():
         return None
-    return ResultsResponse.model_validate(json.loads(path.read_text()))
+    try:
+        return ResultsResponse.model_validate(json.loads(path.read_text()))
+    except (ValidationError, ValueError):
+        # A result written by an older build no longer matches the current
+        # models. Treat it as absent (404) rather than failing with a 500, and
+        # drop the file so the sweep doesn't keep it around for nothing.
+        logger.warning("Discarding stale results file for %s", file_id)
+        path.unlink(missing_ok=True)
+        return None
 
 
 async def event_stream(csv_path: str, file_id: str, request: AnalyseRequest):
@@ -53,6 +64,7 @@ async def event_stream(csv_path: str, file_id: str, request: AnalyseRequest):
                 "analyses_requested": request.analyses if request.analyses is not None else [],
                 "analyses_override": request.analyses is not None,
                 "target_column": request.target_column,
+                "classification_target": request.classification_target,
                 "results": {},
                 "stream_log": [],
                 "summary": "",
