@@ -7,18 +7,71 @@ import AnalysisStream from './AnalysisStream'
 import ResultsDashboard from './ResultsDashboard'
 import { UploadCloud, FileText, ArrowRight, RotateCcw, Download, Settings } from 'lucide-react'
 import { downloadJson } from '../lib/downloads'
-import { columnBadgeVariant, columnBadgeLabel } from '../lib/formatters'
+import { columnBadgeVariant, columnBadgeLabel, formatColumnDetail, formatMissing } from '../lib/formatters'
 
 type UploadResponse  = components['schemas']['UploadResponse']
 type ColumnSchema    = components['schemas']['ColumnSchema']
 type ResultsResponse = components['schemas']['ResultsResponse']
 type AppStep         = 'upload' | 'analyse' | 'results'
 
-const ALL_ANALYSES = [
-  { id: 'run_clustering', label: 'Clustering',        description: 'K-Means — groups similar rows together' },
-  { id: 'run_regression', label: 'Regression',        description: 'Linear regression — predicts a numeric target' },
-  { id: 'run_anomaly',    label: 'Anomaly detection', description: 'IsolationForest — flags unusual rows' },
+// Columns eligible to appear in the regression target dropdown:
+// numeric columns + class_label columns (integers the user may want to predict).
+function targetEligible(col: ColumnSchema) {
+  return col.column_type === 'numeric' || col.column_type === 'class_label'
+}
+
+// Columns eligible as a classification target: detected class labels plus any
+// text/boolean column — the backend rejects high-cardinality ones at run time.
+function classificationEligible(col: ColumnSchema) {
+  return col.column_type === 'class_label' || col.column_type === 'categorical'
+}
+
+interface AnalysisOption {
+  id:          string
+  label:       string
+  description: string
+  // Whether the dataset's columns satisfy the tool's prerequisites (mirrors the backend).
+  available:   (columns: ColumnSchema[]) => boolean
+  // Shown next to a disabled checkbox when `available` is false.
+  hint?:       string
+}
+
+const ALL_ANALYSES: AnalysisOption[] = [
+  {
+    id: 'run_clustering', label: 'Clustering',
+    description: 'K-Means — groups similar rows together',
+    available: cols => cols.filter(targetEligible).length >= 1,
+  },
+  {
+    id: 'run_regression', label: 'Regression',
+    description: 'Linear regression — predicts a numeric target',
+    available: cols => cols.filter(targetEligible).length >= 2,
+  },
+  {
+    id: 'run_classification', label: 'Classification',
+    description: 'RandomForest — predicts a category, cross-validated',
+    available: cols => cols.some(classificationEligible) && cols.some(c => c.column_type === 'numeric'),
+    hint: 'needs a class-label or categorical column',
+  },
+  {
+    id: 'run_anomaly', label: 'Anomaly detection',
+    description: 'IsolationForest — flags unusual rows',
+    available: cols => cols.filter(targetEligible).length >= 1,
+  },
+  {
+    id: 'run_correlation', label: 'Correlation',
+    description: 'Pearson matrix of numeric columns',
+    available: cols => cols.filter(targetEligible).length >= 2,
+  },
 ]
+
+// Only classification is hard-disabled without a target; the others degrade
+// gracefully on the backend (a skipped step in the log), so they stay clickable.
+const HARD_GATED = new Set(['run_classification'])
+
+function defaultAnalyses(columns: ColumnSchema[]): string[] {
+  return ALL_ANALYSES.filter(a => a.available(columns)).map(a => a.id)
+}
 
 interface Props {
   step:             AppStep
@@ -31,12 +84,6 @@ interface Props {
   onReset:          () => void
 }
 
-// Columns eligible to appear in the regression target dropdown:
-// numeric columns + class_label columns (integers the user may want to predict).
-function targetEligible(col: ColumnSchema) {
-  return col.column_type === 'numeric' || col.column_type === 'class_label'
-}
-
 function defaultTarget(columns: ColumnSchema[]): string | null {
   const eligible = columns.filter(targetEligible)
   // Mirror the backend's last-column heuristic (last *continuous* numeric column).
@@ -45,73 +92,188 @@ function defaultTarget(columns: ColumnSchema[]): string | null {
   return pool.length > 0 ? pool[pool.length - 1].name : null
 }
 
+function defaultClassificationTarget(columns: ColumnSchema[]): string | null {
+  // Mirror the backend's auto-pick: first class_label column, else first categorical.
+  const eligible = columns.filter(classificationEligible)
+  const labelled = eligible.find(c => c.column_type === 'class_label')
+  return labelled?.name ?? eligible[0]?.name ?? null
+}
+
+const selectStyle: React.CSSProperties = {
+  marginTop: '2px',
+  padding: '7px 10px',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-background)',
+  color: 'var(--color-text)',
+  fontSize: '0.875rem',
+  fontFamily: 'var(--font-mono, monospace)',
+  cursor: 'pointer',
+  outline: 'none',
+}
+
+function TargetSelect({
+  title, help, value, options, onChange,
+}: {
+  title:    string
+  help:     string
+  value:    string | null
+  options:  ColumnSchema[]
+  onChange: (col: string | null) => void
+}) {
+  return (
+    <div className="mt-1 pt-3" style={{ borderTop: '1px solid var(--color-border-light)' }}>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text)' }}>{title}</span>
+        <span style={{ fontSize: '0.78rem', color: 'var(--color-subtle)' }}>{help}</span>
+        <select value={value ?? ''} onChange={e => onChange(e.target.value || null)} style={selectStyle}>
+          {options.map(c => (
+            <option key={c.name} value={c.name}>
+              {c.name}{c.column_type === 'class_label' ? ' (class label)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+}
+
 function AnalysisSelector({
   columns,
   selectedAnalyses,
   onToggle,
   targetColumn,
   onTargetChange,
+  classificationTarget,
+  onClassificationTargetChange,
 }: {
   columns: ColumnSchema[]
   selectedAnalyses: string[]
   onToggle: (id: string) => void
   targetColumn: string | null
   onTargetChange: (col: string | null) => void
+  classificationTarget: string | null
+  onClassificationTargetChange: (col: string | null) => void
 }) {
-  const targetCols   = columns.filter(targetEligible)
-  const regressionOn = selectedAnalyses.includes('run_regression')
+  const targetCols       = columns.filter(targetEligible)
+  const classCols        = columns.filter(classificationEligible)
+  const regressionOn     = selectedAnalyses.includes('run_regression')
+  const classificationOn = selectedAnalyses.includes('run_classification')
 
   return (
     <div className="flex flex-col gap-3">
-      {ALL_ANALYSES.map(a => (
-        <label key={a.id} className="flex items-start gap-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={selectedAnalyses.includes(a.id)}
-            onChange={() => onToggle(a.id)}
-            style={{ marginTop: '3px', accentColor: 'var(--color-accent)', width: '15px', height: '15px', flexShrink: 0 }}
-          />
-          <div>
-            <p style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text)' }}>{a.label}</p>
-            <p style={{ fontSize: '0.78rem', color: 'var(--color-subtle)' }}>{a.description}</p>
-          </div>
-        </label>
-      ))}
+      {ALL_ANALYSES.map(a => {
+        const disabled = HARD_GATED.has(a.id) && !a.available(columns)
+        return (
+          <label
+            key={a.id}
+            className={`flex items-start gap-3 select-none ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            style={disabled ? { opacity: 0.55 } : undefined}
+          >
+            <input
+              type="checkbox"
+              checked={selectedAnalyses.includes(a.id)}
+              disabled={disabled}
+              onChange={() => onToggle(a.id)}
+              style={{ marginTop: '3px', accentColor: 'var(--color-accent)', width: '15px', height: '15px', flexShrink: 0 }}
+            />
+            <div>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text)' }}>{a.label}</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--color-subtle)' }}>
+                {a.description}
+                {disabled && a.hint && (
+                  <span style={{ color: 'var(--color-accent)' }}> — {a.hint}</span>
+                )}
+              </p>
+            </div>
+          </label>
+        )
+      })}
 
       {regressionOn && targetCols.length > 0 && (
-        <div className="mt-1 pt-3" style={{ borderTop: '1px solid var(--color-border-light)' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text)' }}>
-              Regression target column
-            </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--color-subtle)' }}>
-              The column regression will try to predict. Numeric and class-label columns are eligible.
-            </span>
-            <select
-              value={targetColumn ?? ''}
-              onChange={e => onTargetChange(e.target.value || null)}
-              style={{
-                marginTop: '2px',
-                padding: '7px 10px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-background)',
-                color: 'var(--color-text)',
-                fontSize: '0.875rem',
-                fontFamily: 'var(--font-mono, monospace)',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              {targetCols.map(c => (
-                <option key={c.name} value={c.name}>
-                  {c.name}{c.column_type === 'class_label' ? ' (class label)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <TargetSelect
+          title="Regression target column"
+          help="The column regression will try to predict. Numeric and class-label columns are eligible."
+          value={targetColumn}
+          options={targetCols}
+          onChange={onTargetChange}
+        />
       )}
+
+      {classificationOn && classCols.length > 0 && (
+        <TargetSelect
+          title="Classification target column"
+          help="The category the classifier will try to predict. Class-label and categorical columns are eligible."
+          value={classificationTarget}
+          options={classCols}
+          onChange={onClassificationTargetChange}
+        />
+      )}
+    </div>
+  )
+}
+
+const cellStyle: React.CSSProperties = { padding: '8px 12px', fontSize: '0.8rem', whiteSpace: 'nowrap' }
+const headStyle: React.CSSProperties = { ...cellStyle, color: 'var(--color-muted)', fontWeight: 500, textAlign: 'left' }
+
+function ColumnPreviewTable({ columns }: { columns: ColumnSchema[] }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 'max-content' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <th style={headStyle}>Name</th>
+            <th style={headStyle}>Type</th>
+            <th style={{ ...headStyle, textAlign: 'right' }}>Missing</th>
+            <th style={{ ...headStyle, textAlign: 'right' }}>Unique</th>
+            <th style={headStyle}>Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {columns.map(col => {
+            const missing = col.profile.missing_pct
+            return (
+              <tr key={col.name} style={{ borderTop: '1px solid var(--color-border-light)' }}>
+                <td style={{ ...cellStyle, fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text)' }}>
+                  {col.name}
+                </td>
+                <td style={cellStyle}>
+                  <Badge variant={columnBadgeVariant(col.column_type)}>
+                    {columnBadgeLabel(col.column_type)}
+                  </Badge>
+                </td>
+                <td
+                  style={{
+                    ...cellStyle,
+                    textAlign: 'right',
+                    fontVariantNumeric: 'tabular-nums',
+                    color: missing > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
+                  }}
+                >
+                  {formatMissing(missing)}
+                </td>
+                <td style={{ ...cellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--color-muted)' }}>
+                  {col.profile.unique_count}
+                </td>
+                <td
+                  style={{
+                    ...cellStyle,
+                    color: 'var(--color-muted)',
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: '0.75rem',
+                    maxWidth: 320,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                  title={formatColumnDetail(col.column_type, col.profile)}
+                >
+                  {formatColumnDetail(col.column_type, col.profile)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -125,20 +287,24 @@ export default function UploadForm({
   const [uploading,        setUploading]        = useState(false)
   const [error,            setError]            = useState<string | null>(null)
   const [dragging,         setDragging]         = useState(false)
-  const [selectedAnalyses, setSelectedAnalyses] = useState<string[]>(ALL_ANALYSES.map(a => a.id))
-  const [targetColumn,     setTargetColumn]     = useState<string | null>(null)
-  const [forceRerun,       setForceRerun]       = useState(false)
-  const [showReconfig,     setShowReconfig]     = useState(false)
-  const [reconfigAnalyses, setReconfigAnalyses] = useState<string[]>(ALL_ANALYSES.map(a => a.id))
-  const [reconfigTarget,   setReconfigTarget]   = useState<string | null>(null)
-  const [resultsData,      setResultsData]      = useState<ResultsResponse | null>(null)
+  const [selectedAnalyses,     setSelectedAnalyses]     = useState<string[]>(ALL_ANALYSES.map(a => a.id))
+  const [targetColumn,         setTargetColumn]         = useState<string | null>(null)
+  const [classificationTarget, setClassificationTarget] = useState<string | null>(null)
+  const [forceRerun,           setForceRerun]           = useState(false)
+  const [showReconfig,         setShowReconfig]         = useState(false)
+  const [reconfigAnalyses,     setReconfigAnalyses]     = useState<string[]>(ALL_ANALYSES.map(a => a.id))
+  const [reconfigTarget,       setReconfigTarget]       = useState<string | null>(null)
+  const [reconfigClassTarget,  setReconfigClassTarget]  = useState<string | null>(null)
+  const [resultsData,          setResultsData]          = useState<ResultsResponse | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Default the regression target to the last numeric column whenever a new
-  // upload result arrives — mirrors the backend's own default behaviour.
+  // Whenever a new upload result arrives: pre-select every analysis the columns
+  // can support and default both targets the way the backend would pick them.
   useEffect(() => {
     if (!uploadResult) return
+    setSelectedAnalyses(defaultAnalyses(uploadResult.columns))
     setTargetColumn(defaultTarget(uploadResult.columns))
+    setClassificationTarget(defaultClassificationTarget(uploadResult.columns))
   }, [uploadResult])
 
   // Seed the reconfigure panel from current selections when it opens.
@@ -146,6 +312,7 @@ export default function UploadForm({
     if (!showReconfig) return
     setReconfigAnalyses(selectedAnalyses)
     setReconfigTarget(targetColumn ?? defaultTarget(preloadedColumns))
+    setReconfigClassTarget(classificationTarget ?? defaultClassificationTarget(preloadedColumns))
   }, [showReconfig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleFile(file: File) {
@@ -185,6 +352,7 @@ export default function UploadForm({
   function handleReconfigRun() {
     setSelectedAnalyses(reconfigAnalyses)
     setTargetColumn(reconfigTarget)
+    setClassificationTarget(reconfigClassTarget)
     setForceRerun(true)
     setShowReconfig(false)
     setResultsData(null)
@@ -208,8 +376,8 @@ export default function UploadForm({
             Upload a dataset. Watch the agent think.
           </h2>
           <p style={{ color: 'var(--color-muted)', fontSize: '1rem', maxWidth: '58ch', lineHeight: 1.55 }}>
-            DataLens runs a small LangGraph agent over your CSV — clustering, regression, and
-            anomaly detection from scikit-learn, streamed back as it works.
+            DataLens runs a small LangGraph agent over your CSV — clustering, regression,
+            classification, anomaly detection and correlation from scikit-learn, streamed back as it works.
           </p>
         </section>
 
@@ -218,7 +386,7 @@ export default function UploadForm({
             <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: '24px' }}>
               {[
                 { n: '01', label: 'Inspect',  body: 'We infer column types from your CSV automatically.' },
-                { n: '02', label: 'Analyse',  body: 'A LangGraph agent runs clustering, regression, and anomaly detection.' },
+                { n: '02', label: 'Analyse',  body: 'A LangGraph agent runs clustering, regression, classification, anomaly detection and correlation.' },
                 { n: '03', label: 'Report',   body: 'Charts and a plain-prose summary, streamed back live.' },
               ].map((s, i) => (
                 <div key={s.n} className="relative" style={i > 0 ? { paddingLeft: 12 } : {}}>
@@ -304,24 +472,13 @@ export default function UploadForm({
             <CardHeader>
               <div className="flex items-center justify-between">
                 <p style={{ fontWeight: 500, fontSize: '0.9rem' }}>
-                  {uploadResult.columns.length} columns detected
+                  {uploadResult.row_count.toLocaleString()} rows · {uploadResult.columns.length} columns
                 </p>
                 <Badge variant="success">Ready</Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col divide-y divide-[var(--color-border-light)]">
-                {uploadResult.columns.map((col: ColumnSchema) => (
-                  <div key={col.name} className="flex items-center justify-between py-2">
-                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text)', fontFamily: 'var(--font-mono, monospace)' }}>
-                      {col.name}
-                    </span>
-                    <Badge variant={columnBadgeVariant(col.column_type)}>
-                      {columnBadgeLabel(col.column_type)}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+              <ColumnPreviewTable columns={uploadResult.columns} />
             </CardContent>
           </Card>
         )}
@@ -342,6 +499,8 @@ export default function UploadForm({
                 )}
                 targetColumn={targetColumn}
                 onTargetChange={setTargetColumn}
+                classificationTarget={classificationTarget}
+                onClassificationTargetChange={setClassificationTarget}
               />
             </CardContent>
           </Card>
@@ -379,6 +538,7 @@ export default function UploadForm({
         fileId={fileId}
         analyses={selectedAnalyses}
         targetColumn={targetColumn}
+        classificationTarget={classificationTarget}
         force={forceRerun}
         onDone={() => { setForceRerun(false); onAnalysisDone() }}
       />
@@ -441,6 +601,8 @@ export default function UploadForm({
                 )}
                 targetColumn={reconfigTarget}
                 onTargetChange={setReconfigTarget}
+                classificationTarget={reconfigClassTarget}
+                onClassificationTargetChange={setReconfigClassTarget}
               />
               <div className="flex justify-end mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border-light)' }}>
                 <Button

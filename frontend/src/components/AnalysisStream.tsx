@@ -27,14 +27,17 @@ function formatElapsed(ms: number) {
 }
 
 interface Props {
-  fileId:       string
-  analyses:     string[]
-  targetColumn: string | null
-  force:        boolean
-  onDone:       () => void
+  fileId:               string
+  analyses:             string[]
+  targetColumn:         string | null
+  classificationTarget: string | null
+  force:                boolean
+  onDone:               () => void
 }
 
-export default function AnalysisStream({ fileId, analyses, targetColumn, force, onDone }: Props) {
+export default function AnalysisStream({
+  fileId, analyses, targetColumn, classificationTarget, force, onDone,
+}: Props) {
   const [log, setLog]           = useState<LogEntry[]>([])
   const [isDone, setIsDone]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
@@ -65,7 +68,12 @@ export default function AnalysisStream({ fileId, analyses, targetColumn, force, 
         const response = await fetch(`${import.meta.env.VITE_API_URL}/analyse/${fileId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ analyses, target_column: targetColumn, force }),
+          body: JSON.stringify({
+            analyses,
+            target_column: targetColumn,
+            classification_target: classificationTarget,
+            force,
+          }),
           signal: controller.signal,
         })
         if (!response.ok) {
