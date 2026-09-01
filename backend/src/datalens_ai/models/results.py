@@ -37,6 +37,22 @@ class AnomalyResult(BaseModel):
     feature_stats: dict[str, dict[str, float]]  # per-column {mean, std} for z-score highlighting
 
 
+class ClassificationResult(BaseModel):
+    type: Literal["classification"] = "classification"
+    target_name: str
+    class_labels: list[str]
+    n_classes: int
+    n_samples: int
+    cv_folds: int
+    cv_accuracy: float             # mean out-of-fold accuracy
+    cv_accuracy_std: float         # std of per-fold accuracy
+    baseline_accuracy: float       # majority-class share — what "always guess the biggest class" scores
+    macro_f1: float
+    confusion_matrix: list[list[int]]  # rows = actual class, columns = predicted class
+    feature_names: list[str]
+    feature_importances: list[float]
+
+
 class CorrelationPair(BaseModel):
     feature_a: str
     feature_b: str
@@ -52,7 +68,7 @@ class CorrelationResult(BaseModel):
 
 
 AnalysisResult = Annotated[
-    ClusteringResult | RegressionResult | AnomalyResult | CorrelationResult,
+    ClusteringResult | RegressionResult | AnomalyResult | ClassificationResult | CorrelationResult,
     Field(discriminator="type"),
 ]
 
