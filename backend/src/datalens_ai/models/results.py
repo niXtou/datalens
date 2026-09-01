@@ -37,8 +37,22 @@ class AnomalyResult(BaseModel):
     feature_stats: dict[str, dict[str, float]]  # per-column {mean, std} for z-score highlighting
 
 
+class CorrelationPair(BaseModel):
+    feature_a: str
+    feature_b: str
+    r: float
+
+
+class CorrelationResult(BaseModel):
+    type: Literal["correlation"] = "correlation"
+    columns: list[str]
+    matrix: list[list[float]]      # Pearson r, same order as `columns` on both axes
+    top_pairs: list[CorrelationPair]
+    truncated: bool = False        # True when more numeric columns existed than were analysed
+
+
 AnalysisResult = Annotated[
-    ClusteringResult | RegressionResult | AnomalyResult,
+    ClusteringResult | RegressionResult | AnomalyResult | CorrelationResult,
     Field(discriminator="type"),
 ]
 
