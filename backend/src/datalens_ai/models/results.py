@@ -21,7 +21,10 @@ class RegressionResult(BaseModel):
     feature_names: list[str]
     excluded_columns: list[str]
     target_name: str
-    r2_score: float
+    r2_score: float                # in-sample R² — optimistic, kept for continuity
+    cv_r2_score: float | None      # mean 5-fold cross-validated R²; None when too few rows
+    rmse: float                    # in-sample root mean squared error, in target units
+    n_samples: int
     actuals: list[float]
     predicted: list[float]
 
