@@ -45,7 +45,7 @@ cd backend && uv run ruff check src/ && uv run pytest --cov=datalens_ai --cov-fa
 cd frontend && pnpm exec tsc -b && pnpm lint && pnpm test
 ```
 
-CI runs the same commands on every push (see `.github/workflows/ci.yml`).
+CI runs the same commands on every push (see `.github/workflows/deploy.yml`).
 
 ## Code style
 

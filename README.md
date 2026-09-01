@@ -2,7 +2,7 @@
 
 Upload a CSV → a LangGraph agent profiles it and runs scikit-learn analyses (clustering, regression, classification, anomaly detection, correlation) → results stream to a React dashboard over SSE.
 
-**[Live demo](https://datalens.nstoug.com)** · ![CI](https://github.com/niXtou/datalens/actions/workflows/ci.yml/badge.svg)
+**[Live demo](https://datalens.nstoug.com)** · ![CI](https://github.com/niXtou/datalens/actions/workflows/deploy.yml/badge.svg)
 
 ---
 
@@ -99,7 +99,7 @@ cd frontend && pnpm test
 
 `test_data/wine.csv` (UCI wine, 178 rows, `wine_class` label) is the classification demo; `boston_housing.csv` suits regression.
 
-CI runs both on every push (see `.github/workflows/ci.yml`).
+CI runs both on every push (see `.github/workflows/deploy.yml`).
 
 ---
 

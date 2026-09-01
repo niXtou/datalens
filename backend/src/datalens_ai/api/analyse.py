@@ -1,11 +1,12 @@
 import asyncio
 import json
+import logging
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from datalens_ai.agent.graph import agent
 from datalens_ai.api.upload import resolve_csv_path
@@ -25,6 +26,7 @@ _RESULTS_DIR = Path(tempfile.gettempdir()) / "datalens_ai_results"
 _RESULTS_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _persist(file_id: str, data: dict) -> None:
@@ -39,7 +41,15 @@ def _load_from_disk(file_id: str) -> ResultsResponse | None:
     path = _RESULTS_DIR / f"{file_id}.json"
     if not path.exists():
         return None
-    return ResultsResponse.model_validate(json.loads(path.read_text()))
+    try:
+        return ResultsResponse.model_validate(json.loads(path.read_text()))
+    except (ValidationError, ValueError):
+        # A result written by an older build no longer matches the current
+        # models. Treat it as absent (404) rather than failing with a 500, and
+        # drop the file so the sweep doesn't keep it around for nothing.
+        logger.warning("Discarding stale results file for %s", file_id)
+        path.unlink(missing_ok=True)
+        return None
 
 
 async def event_stream(csv_path: str, file_id: str, request: AnalyseRequest):

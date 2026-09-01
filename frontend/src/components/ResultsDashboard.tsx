@@ -144,7 +144,7 @@ function RegressionPanel({ result }: { result: RegressionResult }) {
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-3 gap-3">
         <MetricCard label="R² (in-sample)" value={result.r2_score.toFixed(4)} />
-        <MetricCard label="R² (5-fold CV)" value={result.cv_r2_score == null ? '—' : result.cv_r2_score.toFixed(4)} />
+        <MetricCard label="R² (cross-validated)" value={result.cv_r2_score == null ? '—' : result.cv_r2_score.toFixed(4)} />
         <MetricCard label="RMSE" value={formatNumber(result.rmse)} />
       </div>
       <p style={{ fontSize: '0.78rem', color: 'var(--color-subtle)' }}>

@@ -282,3 +282,20 @@ def test_analyse_with_classification_target(client, tmp_path):
 
     fetched = client.get(f"/results/{file_id}").json()
     assert fetched["results"]["run_classification"]["type"] == "classification"
+
+
+def test_get_results_stale_disk_file_is_discarded(client):
+    """A results file written by an older build (missing now-required fields)
+    must 404 like a missing result, not 500, and be removed from disk."""
+    from datalens_ai.api.analyse import _RESULTS_DIR
+
+    file_id = str(uuid.uuid4())
+    stale = _RESULTS_DIR / f"{file_id}.json"
+    stale.write_text(json.dumps({
+        "results": {"run_regression": {"type": "regression", "r2_score": 0.5}},
+        "summary": "old",
+    }))
+
+    response = client.get(f"/results/{file_id}")
+    assert response.status_code == 404
+    assert not stale.exists()
