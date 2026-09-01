@@ -65,4 +65,4 @@ async def upload_file(file: UploadFile) -> UploadResponse:
     dest = _UPLOAD_DIR / f"{file_id}.csv"
     dest.write_bytes(contents)
     file_store[file_id] = str(dest)
-    return UploadResponse(file_id=file_id, columns=infer_columns(df))
+    return UploadResponse(file_id=file_id, row_count=len(df), columns=infer_columns(df))
