@@ -17,6 +17,7 @@ export const AXIS_MIN_WIDTH     = 80
 export const HEATMAP_CELL_MAX_PX     = 44    // cell size ceiling; shrinks to fit more columns
 export const HEATMAP_CELL_MIN_PX     = 18
 export const HEATMAP_LABEL_THRESHOLD = 12    // show r inside cells only up to this many columns
+export const HEATMAP_GRID_BUDGET_PX  = 420   // width left for cells after the row-label column
 
 // ── Confusion matrix ──────────────────────────────────────────────────────────
 export const CONFUSION_CELL_PX = 56

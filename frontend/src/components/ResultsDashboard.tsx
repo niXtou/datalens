@@ -11,7 +11,7 @@ import {
   SCATTER_CHART_HEIGHT, REGRESSION_SCATTER_HEIGHT,
   BAR_CHART_MIN_HEIGHT, BAR_CHART_ROW_HEIGHT,
   AXIS_CHAR_WIDTH_PX, AXIS_MIN_WIDTH,
-  HEATMAP_CELL_MAX_PX, HEATMAP_CELL_MIN_PX, HEATMAP_LABEL_THRESHOLD,
+  HEATMAP_CELL_MAX_PX, HEATMAP_CELL_MIN_PX, HEATMAP_LABEL_THRESHOLD, HEATMAP_GRID_BUDGET_PX,
   CONFUSION_CELL_PX,
 } from '../lib/constants'
 import { Download } from 'lucide-react'
@@ -490,7 +490,7 @@ function ClassificationPanel({ result }: { result: ClassificationResult }) {
 
 function CorrelationHeatmap({ result }: { result: CorrelationResult }) {
   const n         = result.columns.length
-  const cellPx    = Math.max(HEATMAP_CELL_MIN_PX, Math.min(HEATMAP_CELL_MAX_PX, Math.floor(560 / Math.max(n, 1))))
+  const cellPx    = Math.max(HEATMAP_CELL_MIN_PX, Math.min(HEATMAP_CELL_MAX_PX, Math.floor(HEATMAP_GRID_BUDGET_PX / Math.max(n, 1))))
   const showText  = n <= HEATMAP_LABEL_THRESHOLD
   const labelSize = showText ? '0.7rem' : '0.62rem'
 
